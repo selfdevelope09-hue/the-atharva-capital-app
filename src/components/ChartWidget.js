@@ -1,15 +1,23 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, Dimensions } from 'react-native';
 import { WebView } from 'react-native-webview';
+
+const { width } = Dimensions.get('window');
 
 export default function ChartWidget({ symbol = "BTCUSDT" }) {
   const chartHtml = `
     <html>
-      <head><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-      <body style="margin:0; background-color:#0b0e11;">
-        <div id="chart"></div>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <style>
+          body { margin: 0; padding: 0; background-color: #0b0e11; overflow: hidden; }
+          #tradingview_widget { height: 100vh; width: 100vw; }
+        </style>
+      </head>
+      <body>
+        <div id="tradingview_widget"></div>
         <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-        <script>
+        <script type="text/javascript">
           new TradingView.widget({
             "autosize": true,
             "symbol": "BINANCE:${symbol}",
@@ -18,10 +26,23 @@ export default function ChartWidget({ symbol = "BTCUSDT" }) {
             "theme": "dark",
             "style": "1",
             "locale": "en",
+            "toolbar_bg": "#1e2329",
             "enable_publishing": false,
-            "hide_top_toolbar": false,
-            "save_image": false,
-            "container_id": "chart"
+            "withdateranges": true,
+            "hide_side_toolbar": false, // ISSE SAARE TOOLS (Trendline, Brush, etc.) AA JAYENGE
+            "allow_symbol_change": true,
+            "details": false,
+            "hotlist": false,
+            "calendar": false,
+            "show_popup_button": true,
+            "popup_width": "1000",
+            "popup_height": "650",
+            "container_id": "tradingview_widget",
+            "studies": [
+              "RSI@tv-basicstudies",      // Default Indicators
+              "MACD@tv-basicstudies",
+              "MASimple@tv-basicstudies"
+            ]
           });
         </script>
       </body>
@@ -29,12 +50,25 @@ export default function ChartWidget({ symbol = "BTCUSDT" }) {
   `;
 
   return (
-    <View style={styles.container}>
-      <WebView originWhitelist={['*']} source={{ html: chartHtml }} />
+    <View style={styles.chartContainer}>
+      <WebView 
+        originWhitelist={['*']} 
+        source={{ html: chartHtml }} 
+        style={styles.webview}
+        javaScriptEnabled={true}
+        domStorageEnabled={true}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { height: 350, backgroundColor: '#0b0e11' }
+  chartContainer: { 
+    height: 450, // Chart ki height thodi badha di hai tools ke liye
+    width: width,
+    backgroundColor: '#0b0e11' 
+  },
+  webview: {
+    backgroundColor: '#0b0e11',
+  }
 });
