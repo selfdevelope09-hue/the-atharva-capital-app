@@ -1,24 +1,32 @@
 import { db } from './FirebaseConfig';
-import { doc, updateDoc, increment, arrayUnion, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, increment, arrayUnion } from 'firebase/firestore';
 
-export const executeTrade = async (userId, symbol, price, amount, type) => {
+export const executeAdvancedTrade = async (userId, data) => {
+  const { symbol, price, amount, leverage, type, tp, sl } = data;
   const userRef = doc(db, "users", userId);
-  const userSnap = await getDoc(userRef);
-  const currentBalance = userSnap.data().virtualBalance;
+  
+  // Margin calculation: Agar 100 USDT ka trade hai 10x leverage par, 
+  // toh user ke wallet se sirf 10 USDT kategi (Margin).
+  const marginRequired = amount / leverage;
 
-  if (type === 'BUY') {
-    if (currentBalance < amount) return { status: 'error', message: 'Insufficient Funds' };
-
+  try {
     await updateDoc(userRef, {
-      virtualBalance: increment(-amount),
-      portfolio: arrayUnion({
-        symbol: symbol,
-        buyPrice: price,
-        quantity: amount / price,
+      virtualBalance: increment(-marginRequired),
+      positions: arrayUnion({
+        symbol,
+        entryPrice: price,
+        leverage,
+        margin: marginRequired,
+        totalSize: amount,
+        type: type, // LONG or SHORT
+        tp: tp || null,
+        sl: sl || null,
+        status: 'OPEN',
         time: new Date()
       })
     });
+    return { success: true, message: `${type} Position Opened!` };
+  } catch (e) {
+    return { success: false, message: e.message };
   }
-  // Sell logic yahan add ho sakti hai
-  return { status: 'success', message: 'Trade Executed!' };
 };
