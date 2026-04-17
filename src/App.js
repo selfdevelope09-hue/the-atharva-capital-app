@@ -1,5 +1,5 @@
 import React, { useState, createContext, useContext, useEffect, useRef, useCallback } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate, Navigate, useSearchParams } from 'react-router-dom';
 import { initializeApp } from 'firebase/app';
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword,
@@ -158,14 +158,16 @@ const Navbar = () => {
 };
 
 // Canvas-based TP/SL overlay that floats above TradingView iframe
-const ChartWithOverlay = ({ symbol, currentPrice, tp, sl, onTpChange, onSlChange, height = 460 }) => {
+const ChartWithOverlay = ({ symbol, currentPrice, tp, sl, onTpChange, onSlChange, height = 460, entryPriceOverride = null }) => {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const dragRef = useRef(null);
   const animRef = useRef(null);
   const priceRef = useRef(currentPrice);
+  const entryOverrideRef = useRef(entryPriceOverride);
 
   useEffect(() => { priceRef.current = currentPrice; }, [currentPrice]);
+  useEffect(() => { entryOverrideRef.current = entryPriceOverride; }, [entryPriceOverride]);
 
   const getRange = useCallback(() => {
     const p = priceRef.current || 1;
@@ -195,6 +197,7 @@ const ChartWithOverlay = ({ symbol, currentPrice, tp, sl, onTpChange, onSlChange
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, w, h);
     const cp = priceRef.current;
+    const entryOverride = entryOverrideRef.current;
 
     function roundRect(x, y, rw, rh, r) {
       ctx.beginPath();
@@ -213,7 +216,6 @@ const ChartWithOverlay = ({ symbol, currentPrice, tp, sl, onTpChange, onSlChange
       const y = priceToY(price);
       if (y === null || y < 4 || y > h - 4) return;
 
-      // Dashed line with glow
       ctx.save();
       ctx.shadowColor = color; ctx.shadowBlur = isDrag ? 16 : 7;
       ctx.setLineDash([7, 5]);
@@ -222,14 +224,12 @@ const ChartWithOverlay = ({ symbol, currentPrice, tp, sl, onTpChange, onSlChange
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
       ctx.restore(); ctx.globalAlpha = 1;
 
-      // Left pill
       const pl = 78, ph = 20;
       ctx.fillStyle = color;
       roundRect(4, y - ph / 2, pl, ph, 4); ctx.fill();
       ctx.fillStyle = '#000'; ctx.font = '700 10px monospace'; ctx.textBaseline = 'middle';
       ctx.fillText(label, 10, y);
 
-      // Price tag right
       const ps = `$${parseFloat(price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: price > 10 ? 2 : 5 })}`;
       ctx.font = '700 10px monospace';
       const ptw = ctx.measureText(ps).width + 14;
@@ -237,7 +237,6 @@ const ChartWithOverlay = ({ symbol, currentPrice, tp, sl, onTpChange, onSlChange
       roundRect(w - ptw - 4, y - ph / 2, ptw, ph, 4); ctx.fill();
       ctx.fillStyle = '#000'; ctx.fillText(ps, w - ptw + 5, y);
 
-      // PnL badge center
       if (pctVal !== null) {
         const pnlStr = `${pctVal >= 0 ? '+' : ''}${pctVal.toFixed(2)}%   $${Math.abs(pnlUsd).toFixed(2)}`;
         ctx.font = '700 10px monospace';
@@ -250,7 +249,6 @@ const ChartWithOverlay = ({ symbol, currentPrice, tp, sl, onTpChange, onSlChange
         ctx.fillStyle = color; ctx.fillText(pnlStr, bx + 9, y);
       }
 
-      // Drag handle
       ctx.setLineDash([]);
       ctx.fillStyle = color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
       ctx.shadowColor = color; ctx.shadowBlur = 10;
@@ -258,14 +256,17 @@ const ChartWithOverlay = ({ symbol, currentPrice, tp, sl, onTpChange, onSlChange
       ctx.fill(); ctx.stroke(); ctx.shadowBlur = 0;
     }
 
-    // Entry line (subtle)
-    const ey = priceToY(cp);
+    // Entry line: use entryPriceOverride if provided, else current price
+    const entryPrice = entryOverride !== null && !isNaN(parseFloat(entryOverride)) ? parseFloat(entryOverride) : cp;
+    const ey = priceToY(entryPrice);
     if (ey !== null && ey > 0 && ey < h) {
       ctx.save(); ctx.setLineDash([4, 8]); ctx.strokeStyle = T.entryLine;
-      ctx.lineWidth = 1; ctx.globalAlpha = 0.45;
+      ctx.lineWidth = 1.8; ctx.globalAlpha = 0.65;
       ctx.beginPath(); ctx.moveTo(0, ey); ctx.lineTo(w, ey); ctx.stroke(); ctx.restore();
-      ctx.font = '600 9px monospace'; ctx.fillStyle = T.entryLine; ctx.globalAlpha = 0.6;
-      ctx.textBaseline = 'bottom'; ctx.fillText(`ENTRY  $${parseFloat(cp).toLocaleString()}`, 6, ey - 3);
+      ctx.font = '600 10px monospace'; ctx.fillStyle = T.entryLine; ctx.globalAlpha = 0.85;
+      ctx.textBaseline = 'bottom';
+      const entryLabel = entryOverride !== null ? `ENTRY (POSITION)  $${parseFloat(entryPrice).toLocaleString()}` : `ENTRY  $${parseFloat(cp).toLocaleString()}`;
+      ctx.fillText(entryLabel, 6, ey - 3);
       ctx.globalAlpha = 1;
     }
 
@@ -283,7 +284,6 @@ const ChartWithOverlay = ({ symbol, currentPrice, tp, sl, onTpChange, onSlChange
       drawLine(slVal, T.slLine, '🛑 SL', pct, usd, dragRef.current === 'sl');
     }
 
-    // R:R badge
     if (tpVal && slVal && tpVal > 0 && slVal > 0) {
       const tpD = Math.abs(tpVal - cp), slD = Math.abs(slVal - cp);
       const rr = slD > 0 ? (tpD / slD).toFixed(2) : '—';
@@ -377,12 +377,12 @@ const ChartWithOverlay = ({ symbol, currentPrice, tp, sl, onTpChange, onSlChange
   );
 };
 
-const OrderForm = ({ symbol, currentPrice, tp, setTp, sl, setSl }) => {
+const OrderForm = ({ symbol, currentPrice, tp, setTp, sl, setSl, defaultSide = null }) => {
   const { user, userData, refreshUser } = useContext(AuthContext);
   const navigate = useNavigate();
   const [orderType, setOrderType] = useState('Market');
   const [feeType, setFeeType] = useState('taker');
-  const [side, setSide] = useState('BUY');
+  const [side, setSide] = useState(defaultSide === 'LONG' ? 'BUY' : (defaultSide === 'SHORT' ? 'SELL' : 'BUY'));
   const [amount, setAmount] = useState('');
   const [amtPct, setAmtPct] = useState(null);
   const [limitPrice, setLimitPrice] = useState('');
@@ -439,7 +439,6 @@ const OrderForm = ({ symbol, currentPrice, tp, setTp, sl, setSl }) => {
 
   return (
     <div style={{ fontFamily: 'inherit' }}>
-      {/* Order type + fee type row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5, marginBottom: 8 }}>
         <div style={{ display: 'flex', background: T.card3, borderRadius: 5, overflow: 'hidden' }}>
           {['Market', 'Limit'].map(t => (
@@ -453,7 +452,6 @@ const OrderForm = ({ symbol, currentPrice, tp, setTp, sl, setSl }) => {
         </div>
       </div>
 
-      {/* Fee info row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 5, marginBottom: 8 }}>
         {[['Maker', '0.02%', T.green], ['Taker', '0.05%', T.yellow], ['Price', `$${parseFloat(currentPrice || 0).toLocaleString()}`, T.white]].map(([l, v, c]) => (
           <div key={l} style={{ background: T.card3, borderRadius: 5, padding: '5px 7px', textAlign: 'center' }}>
@@ -463,7 +461,6 @@ const OrderForm = ({ symbol, currentPrice, tp, setTp, sl, setSl }) => {
         ))}
       </div>
 
-      {/* Long / Short */}
       <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', marginBottom: 10, border: `1px solid ${T.border}` }}>
         <button onClick={() => setSide('BUY')} style={{ flex: 1, padding: '10px 0', border: 'none', cursor: 'pointer', background: side === 'BUY' ? T.green : 'transparent', color: side === 'BUY' ? '#000' : T.text, fontWeight: 800, fontSize: 13, fontFamily: 'inherit' }}>▲ Long</button>
         <button onClick={() => setSide('SELL')} style={{ flex: 1, padding: '10px 0', border: 'none', cursor: 'pointer', background: side === 'SELL' ? T.red : 'transparent', color: side === 'SELL' ? '#fff' : T.text, fontWeight: 800, fontSize: 13, fontFamily: 'inherit' }}>▼ Short</button>
@@ -483,7 +480,6 @@ const OrderForm = ({ symbol, currentPrice, tp, setTp, sl, setSl }) => {
         </div>
       )}
 
-      {/* Amount */}
       <div style={{ marginBottom: 7 }}>
         <div style={{ color: T.text, fontSize: 11, marginBottom: 3 }}>Amount (USDT)</div>
         <Inp type="number" placeholder="0.00" value={amount} onChange={e => { setAmount(e.target.value); setAmtPct(null); }} />
@@ -494,7 +490,6 @@ const OrderForm = ({ symbol, currentPrice, tp, setTp, sl, setSl }) => {
         </div>
       </div>
 
-      {/* Leverage */}
       <div style={{ marginBottom: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
           <span style={{ color: T.text, fontSize: 11 }}>Leverage</span>
@@ -508,7 +503,6 @@ const OrderForm = ({ symbol, currentPrice, tp, setTp, sl, setSl }) => {
         </div>
       </div>
 
-      {/* TP / SL */}
       <div style={{ marginBottom: 8 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
           <span style={{ color: T.text2, fontSize: 11, fontWeight: 700 }}>Take Profit / Stop Loss</span>
@@ -533,7 +527,6 @@ const OrderForm = ({ symbol, currentPrice, tp, setTp, sl, setSl }) => {
         {(tp || sl) && <div style={{ color: T.text, fontSize: 10, marginTop: 4, textAlign: 'center' }}>💡 Drag lines on chart to adjust</div>}
       </div>
 
-      {/* Summary */}
       {amt > 0 && (
         <div style={{ background: T.card3, borderRadius: 6, padding: '9px 11px', marginBottom: 9 }}>
           <div style={{ fontSize: 10, color: T.text, fontWeight: 700, marginBottom: 5, textTransform: 'uppercase', letterSpacing: 0.5 }}>Order Summary</div>
@@ -567,44 +560,85 @@ const OrderForm = ({ symbol, currentPrice, tp, setTp, sl, setSl }) => {
 
 const TradeScreen = () => {
   const prices = useContext(PriceContext);
-  const params = new URLSearchParams(window.location.search || (window.location.hash.includes('?') ? window.location.hash.split('?')[1] : ''));
-  const [symbol, setSymbol] = useState(params.get('symbol') || 'BTCUSDT');
-  const [tp, setTp] = useState('');
-  const [sl, setSl] = useState('');
+  const [searchParams] = useSearchParams();
+  const [symbol, setSymbol] = useState(searchParams.get('symbol') || 'BTCUSDT');
+  const [tp, setTp] = useState(searchParams.get('tp') || '');
+  const [sl, setSl] = useState(searchParams.get('sl') || '');
+  const [entryPriceOverride, setEntryPriceOverride] = useState(searchParams.get('entry') || null);
+  const [defaultSide, setDefaultSide] = useState(searchParams.get('side') || null);
   const [showPanel, setShowPanel] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const chartContainerRef = useRef(null);
 
   useEffect(() => {
     const fn = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', fn); return () => window.removeEventListener('resize', fn);
   }, []);
 
+  useEffect(() => {
+    const sym = searchParams.get('symbol');
+    const tpParam = searchParams.get('tp');
+    const slParam = searchParams.get('sl');
+    const entryParam = searchParams.get('entry');
+    const sideParam = searchParams.get('side');
+    if (sym) setSymbol(sym);
+    if (tpParam) setTp(tpParam);
+    if (slParam) setSl(slParam);
+    if (entryParam) setEntryPriceOverride(entryParam);
+    if (sideParam) setDefaultSide(sideParam);
+  }, [searchParams]);
+
   const liveData = prices[symbol] || {};
   const currentPrice = parseFloat(liveData.price || 0);
   const pairs = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'LINKUSDT', 'MATICUSDT'];
 
+  const toggleFullscreen = () => {
+    if (!chartContainerRef.current) return;
+    if (!isFullscreen) {
+      chartContainerRef.current.requestFullscreen().catch(err => console.error(err));
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  const fullscreenButton = !isMobile && (
+    <button onClick={toggleFullscreen} style={{ background: T.card3, border: `1px solid ${T.border}`, color: T.white, padding: '4px 10px', borderRadius: 5, cursor: 'pointer', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
+      {isFullscreen ? '✕ Exit Fullscreen' : '⤢ Fullscreen'}
+    </button>
+  );
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: isMobile ? 'calc(100vh - 50px)' : 'auto' }}>
-      {/* Symbol tabs */}
       <div style={{ display: 'flex', gap: 4, padding: '6px 10px', background: T.card, borderBottom: `1px solid ${T.border}`, overflowX: 'auto', flexShrink: 0 }}>
         {pairs.map(s => (
-          <button key={s} onClick={() => { setSymbol(s); setTp(''); setSl(''); }} style={{ background: symbol === s ? T.yellow : T.card3, color: symbol === s ? '#000' : T.text2, border: 'none', padding: '5px 11px', borderRadius: 4, cursor: 'pointer', fontWeight: symbol === s ? 800 : 500, fontSize: 12, whiteSpace: 'nowrap', fontFamily: 'inherit' }}>{s.replace('USDT', '')}</button>
+          <button key={s} onClick={() => { setSymbol(s); setTp(''); setSl(''); setEntryPriceOverride(null); setDefaultSide(null); }} style={{ background: symbol === s ? T.yellow : T.card3, color: symbol === s ? '#000' : T.text2, border: 'none', padding: '5px 11px', borderRadius: 4, cursor: 'pointer', fontWeight: symbol === s ? 800 : 500, fontSize: 12, whiteSpace: 'nowrap', fontFamily: 'inherit' }}>{s.replace('USDT', '')}</button>
         ))}
       </div>
 
-      {/* Price bar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 12px', background: T.bg, borderBottom: `1px solid ${T.border}`, flexShrink: 0, flexWrap: 'wrap' }}>
-        <span style={{ color: T.white, fontWeight: 800, fontSize: 14 }}>{symbol.replace('USDT', '')}/USDT</span>
-        <span style={{ color: parseFloat(liveData.change || 0) >= 0 ? T.green : T.red, fontWeight: 800, fontSize: 18 }}>${parseFloat(currentPrice).toLocaleString()}</span>
-        <span style={{ color: parseFloat(liveData.change || 0) >= 0 ? T.green : T.red, fontSize: 12, background: parseFloat(liveData.change || 0) >= 0 ? T.greenDim : T.redDim, padding: '2px 7px', borderRadius: 3 }}>{parseFloat(liveData.change || 0) >= 0 ? '+' : ''}{liveData.change || '0.00'}%</span>
-        <span style={{ color: T.text, fontSize: 11 }}>H: <b style={{ color: T.text2 }}>${parseFloat(liveData.high || 0).toLocaleString()}</b></span>
-        <span style={{ color: T.text, fontSize: 11 }}>L: <b style={{ color: T.text2 }}>${parseFloat(liveData.low || 0).toLocaleString()}</b></span>
-        <span style={{ color: T.text, fontSize: 11 }}>Vol: <b style={{ color: T.text2 }}>{liveData.vol ? (liveData.vol / 1e6).toFixed(1) + 'M' : '—'}</b></span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '6px 12px', background: T.bg, borderBottom: `1px solid ${T.border}`, flexShrink: 0, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ color: T.white, fontWeight: 800, fontSize: 14 }}>{symbol.replace('USDT', '')}/USDT</span>
+          <span style={{ color: parseFloat(liveData.change || 0) >= 0 ? T.green : T.red, fontWeight: 800, fontSize: 18 }}>${parseFloat(currentPrice).toLocaleString()}</span>
+          <span style={{ color: parseFloat(liveData.change || 0) >= 0 ? T.green : T.red, fontSize: 12, background: parseFloat(liveData.change || 0) >= 0 ? T.greenDim : T.redDim, padding: '2px 7px', borderRadius: 3 }}>{parseFloat(liveData.change || 0) >= 0 ? '+' : ''}{liveData.change || '0.00'}%</span>
+          <span style={{ color: T.text, fontSize: 11 }}>H: <b style={{ color: T.text2 }}>${parseFloat(liveData.high || 0).toLocaleString()}</b></span>
+          <span style={{ color: T.text, fontSize: 11 }}>L: <b style={{ color: T.text2 }}>${parseFloat(liveData.low || 0).toLocaleString()}</b></span>
+          <span style={{ color: T.text, fontSize: 11 }}>Vol: <b style={{ color: T.text2 }}>{liveData.vol ? (liveData.vol / 1e6).toFixed(1) + 'M' : '—'}</b></span>
+        </div>
+        {fullscreenButton}
       </div>
 
       {isMobile ? (
         <div style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <ChartWithOverlay symbol={symbol} currentPrice={currentPrice} tp={tp} sl={sl} onTpChange={setTp} onSlChange={setSl} height="100%" />
+          <ChartWithOverlay symbol={symbol} currentPrice={currentPrice} tp={tp} sl={sl} onTpChange={setTp} onSlChange={setSl} height="100%" entryPriceOverride={entryPriceOverride} />
 
           {!showPanel && (
             <button onClick={() => setShowPanel(true)} style={{ position: 'absolute', bottom: 18, right: 14, zIndex: 50, background: T.green, color: '#000', border: 'none', borderRadius: 28, padding: '13px 22px', fontWeight: 900, fontSize: 14, cursor: 'pointer', boxShadow: '0 4px 24px rgba(14,203,129,0.45)', fontFamily: 'inherit' }}>
@@ -619,18 +653,18 @@ const TradeScreen = () => {
                 <button onClick={() => setShowPanel(false)} style={{ position: 'absolute', right: 14, background: 'none', border: 'none', color: T.text, fontSize: 18, cursor: 'pointer' }}>✕</button>
               </div>
               <div style={{ padding: '12px 14px 28px', overflowY: 'auto', flex: 1 }}>
-                <OrderForm symbol={symbol} currentPrice={currentPrice} tp={tp} setTp={setTp} sl={sl} setSl={setSl} />
+                <OrderForm symbol={symbol} currentPrice={currentPrice} tp={tp} setTp={setTp} sl={sl} setSl={setSl} defaultSide={defaultSide} />
               </div>
             </div>
           )}
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 295px', gap: 8, padding: 10, maxWidth: 1400, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+        <div ref={chartContainerRef} style={{ display: 'grid', gridTemplateColumns: '1fr 295px', gap: 8, padding: 10, maxWidth: 1400, margin: '0 auto', width: '100%', boxSizing: 'border-box', transition: 'all 0.2s' }}>
           <Card style={{ overflow: 'hidden', padding: 0 }}>
-            <ChartWithOverlay symbol={symbol} currentPrice={currentPrice} tp={tp} sl={sl} onTpChange={setTp} onSlChange={setSl} height={500} />
+            <ChartWithOverlay symbol={symbol} currentPrice={currentPrice} tp={tp} sl={sl} onTpChange={setTp} onSlChange={setSl} height={500} entryPriceOverride={entryPriceOverride} />
           </Card>
           <Card style={{ padding: 12, overflowY: 'auto', maxHeight: 500 }}>
-            <OrderForm symbol={symbol} currentPrice={currentPrice} tp={tp} setTp={setTp} sl={sl} setSl={setSl} />
+            <OrderForm symbol={symbol} currentPrice={currentPrice} tp={tp} setTp={setTp} sl={sl} setSl={setSl} defaultSide={defaultSide} />
           </Card>
         </div>
       )}
@@ -744,6 +778,7 @@ const MarketsScreen = () => {
 const DashboardScreen = () => {
   const { user, userData, refreshUser } = useContext(AuthContext);
   const prices = useContext(PriceContext);
+  const navigate = useNavigate();
   const [closeMsg, setCloseMsg] = useState(null);
   const [tab, setTab] = useState('open');
 
@@ -775,6 +810,16 @@ const DashboardScreen = () => {
       setCloseMsg({ t: finalPnl >= 0 ? 's' : 'e', m: `Closed. PnL: ${finalPnl >= 0 ? '+' : ''}$${finalPnl.toFixed(2)}` });
       setTimeout(() => setCloseMsg(null), 3000);
     } catch (e) { setCloseMsg({ t: 'e', m: e.message }); }
+  };
+
+  const openPositionClick = (pos) => {
+    const params = new URLSearchParams();
+    params.set('symbol', pos.symbol);
+    if (pos.tp) params.set('tp', pos.tp);
+    if (pos.sl) params.set('sl', pos.sl);
+    params.set('entry', pos.entryPrice);
+    params.set('side', pos.type);
+    navigate(`/trade?${params.toString()}`);
   };
 
   const closed = userData?.closedPositions || [];
@@ -820,7 +865,7 @@ const DashboardScreen = () => {
         enriched.length === 0
           ? <Card style={{ textAlign: 'center', padding: 32 }}><div style={{ color: T.text, marginBottom: 12, fontSize: 13 }}>No open positions.</div><Link to="/trade" style={{ background: T.yellow, color: '#000', padding: '8px 20px', borderRadius: 6, textDecoration: 'none', fontWeight: 700, fontSize: 13 }}>Open Trade</Link></Card>
           : enriched.map((pos, i) => (
-            <Card key={i} style={{ marginBottom: 7, borderLeft: `3px solid ${pos.type === 'LONG' ? T.green : T.red}`, padding: 11 }}>
+            <Card key={i} style={{ marginBottom: 7, borderLeft: `3px solid ${pos.type === 'LONG' ? T.green : T.red}`, padding: 11, cursor: 'pointer' }} onClick={() => openPositionClick(pos)}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7, flexWrap: 'wrap' }}>
@@ -834,7 +879,7 @@ const DashboardScreen = () => {
                     ))}
                   </div>
                 </div>
-                <button onClick={() => handleClose(i)} style={{ background: T.card3, border: `1px solid ${T.border}`, color: T.white, padding: '6px 12px', borderRadius: 5, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit', flexShrink: 0, alignSelf: 'flex-start' }}>Close</button>
+                <button onClick={(e) => { e.stopPropagation(); handleClose(i); }} style={{ background: T.card3, border: `1px solid ${T.border}`, color: T.white, padding: '6px 12px', borderRadius: 5, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit', flexShrink: 0, alignSelf: 'flex-start' }}>Close</button>
               </div>
             </Card>
           ))
