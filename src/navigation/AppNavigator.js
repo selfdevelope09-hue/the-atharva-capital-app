@@ -1,29 +1,51 @@
-import React, { useContext } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
-import { AuthContext } from '../context/AuthContext';
+import React from 'react';
+import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 
+import HomeScreen from '../screens/HomeScreen';
+import Dashboard from '../screens/Dashboard';
+import TradeScreen from '../screens/TradeScreen';
+import WalletScreen from '../screens/WalletScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
-import MainTabs from './MainTabs'; // Isme Home, Market, Trade honge
 
-const Stack = createStackNavigator();
-
-export default function AppNavigator() {
-  const { user } = useContext(AuthContext);
-
+const AppNavigator = () => {
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {user ? (
-          <Stack.Screen name="Main" component={MainTabs} />
-        ) : (
-          <>
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Signup" component={SignupScreen} />
-          </>
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+    <Router>
+      <div style={{ backgroundColor: '#0b0e11', minHeight: '100vh', color: 'white' }}>
+        
+        {/* Navbar */}
+        <nav style={{
+          padding: '15px 20px',
+          borderBottom: '1px solid #333',
+          display: 'flex',
+          justifyContent: 'space-between'
+        }}>
+          <div style={{ color: '#f0b90b', fontWeight: 'bold' }}>
+            THE ATHARVA CAPITAL
+          </div>
+
+          <div style={{ display: 'flex', gap: '15px' }}>
+            <a href="#/">Home</a>
+            <a href="#/dashboard">Dashboard</a>
+            <a href="#/trade">Trade</a>
+            <a href="#/wallet">Wallet</a>
+            <a href="#/login">Login</a>
+          </div>
+        </nav>
+
+        {/* Routes */}
+        <Routes>
+          <Route path="/" element={<HomeScreen />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/trade" element={<TradeScreen />} />
+          <Route path="/wallet" element={<WalletScreen />} />
+          <Route path="/login" element={<LoginScreen />} />
+          <Route path="/signup" element={<SignupScreen />} />
+        </Routes>
+
+      </div>
+    </Router>
   );
-}
+};
+
+export default AppNavigator;
