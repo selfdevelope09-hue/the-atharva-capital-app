@@ -2,39 +2,15 @@ import React, { useState, createContext, useContext, useEffect, useRef, useCallb
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
 import { initializeApp } from 'firebase/app';
 import {
-  getAuth,
-  onAuthStateChanged,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut
+  getAuth, onAuthStateChanged, createUserWithEmailAndPassword,
+  signInWithEmailAndPassword, signOut
 } from 'firebase/auth';
 import {
-  getFirestore,
-  doc,
-  setDoc,
-  getDoc,
-  updateDoc,
-  increment,
-  arrayUnion,
-  arrayRemove,
-  collection,
-  query,
-  orderBy,
-  limit,
-  getDocs,
-  runTransaction
+  getFirestore, doc, setDoc, getDoc, updateDoc, increment,
+  arrayUnion, arrayRemove, collection, query, orderBy, limit, getDocs, runTransaction
 } from 'firebase/firestore';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer
-} from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
-// -------------------- Firebase Config --------------------
 const firebaseConfig = {
   apiKey: "AIzaSyB4bz_8fGhrCqyyV-N_pA7s7dzVMKIPn_w",
   authDomain: "theatharvacapital-trading.firebaseapp.com",
@@ -47,23 +23,18 @@ const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
 
-// -------------------- Theme --------------------
 const T = {
-  bg: '#0b0e11',
-  card: '#1e2329',
-  card2: '#2b3139',
-  yellow: '#f0b90b',
-  green: '#02c076',
-  red: '#f6465d',
-  text: '#848e9c',
-  white: '#ffffff',
-  border: '#2b2f36',
-  tpColor: '#02c076',
-  slColor: '#f6465d',
-  entryColor: '#f0b90b'
+  bg: '#0b0e11', card: '#161a1e', card2: '#1e2329', card3: '#252b33',
+  yellow: '#f0b90b', yellowDim: 'rgba(240,185,11,0.12)',
+  green: '#0ecb81', greenDim: 'rgba(14,203,129,0.12)',
+  red: '#f6465d', redDim: 'rgba(246,70,93,0.12)',
+  text: '#7b8390', text2: '#a8b0bc', white: '#eaecef',
+  border: '#2b2f36', border2: '#1e2329',
+  tpLine: '#0ecb81', slLine: '#f6465d', entryLine: '#f0b90b'
 };
 
-// -------------------- Context --------------------
+const FEES = { maker: 0.0002, taker: 0.0005 };
+
 const AuthContext = createContext();
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -73,46 +44,33 @@ const AuthProvider = ({ children }) => {
   const fetchUserData = async (uid) => {
     const snap = await getDoc(doc(db, 'users', uid));
     if (snap.exists()) {
-      const data = snap.data();
-      data.positions = data.positions || [];
-      data.closedPositions = data.closedPositions || [];
-      data.watchlist = data.watchlist || [];
-      setUserData(data);
-      return data;
+      const data = { positions: [], closedPositions: [], watchlist: [], ...snap.data() };
+      setUserData(data); return data;
     }
     return null;
   };
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
+    return onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) await fetchUserData(u.uid);
       else setUserData(null);
       setLoading(false);
     });
-    return unsub;
   }, []);
 
   const signUp = async (email, password, name) => {
     const res = await createUserWithEmailAndPassword(auth, email, password);
-    const data = {
-      uid: res.user.uid, email, name: name || 'Trader',
-      virtualBalance: 10000, positions: [], closedPositions: [],
-      watchlist: [], createdAt: new Date().toISOString()
-    };
+    const data = { uid: res.user.uid, email, name: name || 'Trader', virtualBalance: 10000, positions: [], closedPositions: [], watchlist: [], createdAt: new Date().toISOString() };
     await setDoc(doc(db, 'users', res.user.uid), data);
     setUserData(data);
   };
 
-  const login = (email, password) => signInWithEmailAndPassword(auth, email, password);
+  const login = (e, p) => signInWithEmailAndPassword(auth, e, p);
   const logout = () => signOut(auth);
-  const refreshUser = async () => { if (user) return await fetchUserData(user.uid); };
+  const refreshUser = async () => { if (user) return fetchUserData(user.uid); };
 
-  return (
-    <AuthContext.Provider value={{ user, userData, loading, signUp, login, logout, refreshUser }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={{ user, userData, loading, signUp, login, logout, refreshUser }}>{children}</AuthContext.Provider>;
 };
 
 const PriceContext = createContext({});
@@ -123,541 +81,556 @@ const PriceProvider = ({ children }) => {
     const connect = () => {
       ws = new WebSocket('wss://stream.binance.com:9443/ws/!miniTicker@arr');
       ws.onmessage = (e) => {
-        const data = JSON.parse(e.data);
-        const updates = {};
-        data.forEach((coin) => {
-          if (coin.s.endsWith('USDT')) {
-            updates[coin.s] = {
-              price: parseFloat(coin.c).toFixed(2),
-              close: parseFloat(coin.c),
-              open: parseFloat(coin.o),
-              change: (((parseFloat(coin.c) - parseFloat(coin.o)) / parseFloat(coin.o)) * 100).toFixed(2)
-            };
+        const arr = JSON.parse(e.data);
+        const upd = {};
+        arr.forEach(c => {
+          if (c.s.endsWith('USDT')) {
+            upd[c.s] = { price: parseFloat(c.c).toFixed(2), close: parseFloat(c.c), open: parseFloat(c.o), high: parseFloat(c.h), low: parseFloat(c.l), vol: parseFloat(c.v), change: (((parseFloat(c.c) - parseFloat(c.o)) / parseFloat(c.o)) * 100).toFixed(2) };
           }
         });
-        setPrices((prev) => ({ ...prev, ...updates }));
+        setPrices(prev => ({ ...prev, ...upd }));
       };
       ws.onclose = () => setTimeout(connect, 3000);
     };
     connect();
-    return () => ws && ws.close();
+    return () => ws?.close();
   }, []);
   return <PriceContext.Provider value={prices}>{children}</PriceContext.Provider>;
 };
 
-// -------------------- Protected Route --------------------
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useContext(AuthContext);
-  if (loading) return <div style={{ color: T.yellow, textAlign: 'center', marginTop: 80, fontSize: 18 }}>Loading...</div>;
+  if (loading) return <div style={{ color: T.yellow, textAlign: 'center', marginTop: 80, fontSize: 16 }}>Loading...</div>;
   if (!user) return <Navigate to="/login" />;
   return children;
 };
 
-// -------------------- UI Components --------------------
-const Input = ({ style, ...props }) => (
-  <input
-    style={{
-      backgroundColor: T.card2, border: `1px solid ${T.border}`,
-      color: T.white, padding: '10px 12px', borderRadius: 6,
-      width: '100%', fontSize: 13, outline: 'none', boxSizing: 'border-box', ...style
-    }}
-    {...props}
-  />
+const Inp = ({ style, ...p }) => (
+  <input style={{ background: T.card3, border: `1px solid ${T.border}`, color: T.white, padding: '9px 11px', borderRadius: 5, width: '100%', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', ...style }} {...p} />
 );
 
-const Btn = ({ children, style, color, ...props }) => (
-  <button
-    style={{
-      backgroundColor: color || T.yellow, color: color ? T.white : '#000',
-      border: 'none', padding: '12px 20px', borderRadius: 6,
-      fontWeight: 'bold', fontSize: 14, cursor: 'pointer', width: '100%',
-      opacity: props.disabled ? 0.6 : 1, transition: 'opacity 0.2s', ...style
-    }}
-    {...props}
-  >
-    {children}
-  </button>
+const Btn = ({ children, style, bg, tc, ...p }) => (
+  <button style={{ background: bg || T.yellow, color: tc || '#000', border: 'none', padding: '11px 16px', borderRadius: 6, fontWeight: 700, fontSize: 13, cursor: 'pointer', width: '100%', opacity: p.disabled ? 0.55 : 1, fontFamily: 'inherit', ...style }} {...p}>{children}</button>
 );
 
-const Card = ({ children, style }) => (
-  <div style={{ backgroundColor: T.card, borderRadius: 12, padding: 20, ...style }}>{children}</div>
-);
+const Card = ({ children, style }) => <div style={{ background: T.card2, borderRadius: 10, ...style }}>{children}</div>;
+const fmt = (n, d = 2) => parseFloat(n || 0).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 
-// -------------------- Navbar --------------------
 const Navbar = () => {
   const { user, userData, logout } = useContext(AuthContext);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [open, setOpen] = useState(false);
+  const links = [['/', 'Home'], ['/markets', 'Markets'], ['/trade', 'Trade'], ['/dashboard', 'Dashboard'], ['/wallet', 'Wallet'], ['/leaderboard', 'Leaderboard']];
   return (
-    <nav style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px', height: 52, backgroundColor: T.card, borderBottom: `1px solid ${T.border}`, position: 'sticky', top: 0, zIndex: 200 }}>
-      <Link to="/" style={{ color: T.yellow, fontWeight: 'bold', textDecoration: 'none', fontSize: 16, letterSpacing: 1 }}>⚡ ATHARVA CAPITAL</Link>
-      {/* Desktop */}
-      <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }} className="desktop-nav">
-        {['/', '/markets', '/trade', '/dashboard', '/wallet', '/leaderboard'].map((p) => (
-          <Link key={p} to={p} style={{ color: T.text, textDecoration: 'none', fontSize: 13, fontWeight: 500 }}>
-            {p === '/' ? 'Home' : p.slice(1).charAt(0).toUpperCase() + p.slice(2)}
-          </Link>
-        ))}
-        {user ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ color: T.yellow, fontSize: 13, fontWeight: 700 }}>
-              ${parseFloat(userData?.virtualBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
-            <button onClick={logout} style={{ background: 'none', border: `1px solid ${T.red}`, color: T.red, padding: '4px 12px', borderRadius: 5, cursor: 'pointer', fontSize: 12 }}>Logout</button>
-          </div>
-        ) : (
-          <Link to="/login" style={{ backgroundColor: T.yellow, color: '#000', padding: '6px 16px', borderRadius: 5, textDecoration: 'none', fontWeight: 'bold', fontSize: 13 }}>Login</Link>
-        )}
-      </div>
+    <>
       <style>{`
-        @media (max-width: 700px) { .desktop-nav { display: none !important; } .mobile-menu-btn { display: flex !important; } }
-        @media (min-width: 701px) { .mobile-menu-btn { display: none !important; } }
+        @media(max-width:720px){.dnav{display:none!important}.mnav{display:flex!important}}
+        @media(min-width:721px){.mnav{display:none!important}}
+        input[type=range]{accent-color:${T.yellow}}
+        *{scrollbar-width:thin;scrollbar-color:${T.border} transparent}
+        *::-webkit-scrollbar{width:3px;height:3px}
+        *::-webkit-scrollbar-thumb{background:${T.border};border-radius:2px}
       `}</style>
-      <div className="mobile-menu-btn" style={{ display: 'none', alignItems: 'center', gap: 10 }}>
-        {user && <span style={{ color: T.yellow, fontSize: 12, fontWeight: 700 }}>${parseFloat(userData?.virtualBalance || 0).toFixed(0)}</span>}
-        <button onClick={() => setMenuOpen(!menuOpen)} style={{ background: 'none', border: 'none', color: T.white, fontSize: 22, cursor: 'pointer' }}>☰</button>
-      </div>
-      {menuOpen && (
-        <div style={{ position: 'absolute', top: 52, right: 0, backgroundColor: T.card, border: `1px solid ${T.border}`, borderRadius: '0 0 10px 10px', zIndex: 300, padding: '8px 0', minWidth: 160 }}>
-          {['/', '/markets', '/trade', '/dashboard', '/wallet', '/leaderboard'].map((p) => (
-            <Link key={p} to={p} onClick={() => setMenuOpen(false)} style={{ display: 'block', color: T.text, textDecoration: 'none', fontSize: 14, padding: '10px 20px' }}>
-              {p === '/' ? 'Home' : p.slice(1).charAt(0).toUpperCase() + p.slice(2)}
-            </Link>
-          ))}
-          {user ? <button onClick={() => { logout(); setMenuOpen(false); }} style={{ width: '100%', background: 'none', border: 'none', color: T.red, padding: '10px 20px', textAlign: 'left', cursor: 'pointer', fontSize: 14 }}>Logout</button>
-            : <Link to="/login" onClick={() => setMenuOpen(false)} style={{ display: 'block', color: T.yellow, padding: '10px 20px', textDecoration: 'none', fontWeight: 700, fontSize: 14 }}>Login</Link>}
+      <nav style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 14px', height: 50, background: T.card, borderBottom: `1px solid ${T.border}`, position: 'sticky', top: 0, zIndex: 500 }}>
+        <Link to="/" style={{ color: T.yellow, fontWeight: 900, textDecoration: 'none', fontSize: 15, letterSpacing: 0.5 }}>⚡ ATHARVA CAPITAL</Link>
+        <div className="dnav" style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+          {links.map(([p, l]) => <Link key={p} to={p} style={{ color: T.text2, textDecoration: 'none', fontSize: 13 }}>{l}</Link>)}
+          {user ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ color: T.yellow, fontSize: 12, fontWeight: 700, background: T.yellowDim, padding: '4px 10px', borderRadius: 4 }}>${fmt(userData?.virtualBalance)}</span>
+              <button onClick={logout} style={{ background: 'none', border: `1px solid ${T.red}`, color: T.red, padding: '4px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>Out</button>
+            </div>
+          ) : <Link to="/login" style={{ background: T.yellow, color: '#000', padding: '5px 14px', borderRadius: 4, textDecoration: 'none', fontWeight: 700, fontSize: 12 }}>Login</Link>}
         </div>
-      )}
-    </nav>
+        <div className="mnav" style={{ display: 'none', alignItems: 'center', gap: 8 }}>
+          {user && <span style={{ color: T.yellow, fontSize: 11, fontWeight: 700 }}>${fmt(userData?.virtualBalance, 0)}</span>}
+          <button onClick={() => setOpen(o => !o)} style={{ background: 'none', border: 'none', color: T.white, fontSize: 20, cursor: 'pointer' }}>☰</button>
+        </div>
+        {open && (
+          <div style={{ position: 'fixed', top: 50, right: 0, background: T.card, border: `1px solid ${T.border}`, borderRadius: '0 0 10px 10px', zIndex: 600, minWidth: 180, boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
+            {links.map(([p, l]) => <Link key={p} to={p} onClick={() => setOpen(false)} style={{ display: 'block', color: T.text2, textDecoration: 'none', padding: '11px 20px', fontSize: 14, borderBottom: `1px solid ${T.border2}` }}>{l}</Link>)}
+            {user ? <button onClick={() => { logout(); setOpen(false); }} style={{ width: '100%', background: 'none', border: 'none', color: T.red, padding: '11px 20px', textAlign: 'left', cursor: 'pointer', fontSize: 14 }}>Logout</button>
+              : <Link to="/login" onClick={() => setOpen(false)} style={{ display: 'block', color: T.yellow, padding: '11px 20px', textDecoration: 'none', fontWeight: 700, fontSize: 14 }}>Login</Link>}
+          </div>
+        )}
+      </nav>
+    </>
   );
 };
 
-// -------------------- Chart Overlay - TP/SL Lines --------------------
-const ChartOverlay = ({ currentPrice, tp, sl, side, onTpChange, onSlChange }) => {
-  const containerRef = useRef(null);
-  const isDraggingTp = useRef(false);
-  const isDraggingSl = useRef(false);
-  const [chartHeight] = useState(420);
+// Canvas-based TP/SL overlay that floats above TradingView iframe
+const ChartWithOverlay = ({ symbol, currentPrice, tp, sl, onTpChange, onSlChange, height = 460 }) => {
+  const wrapRef = useRef(null);
+  const canvasRef = useRef(null);
+  const dragRef = useRef(null);
+  const animRef = useRef(null);
+  const priceRef = useRef(currentPrice);
 
-  // Price range for mapping (current price ± 3%)
-  const priceRange = currentPrice * 0.06;
-  const minPrice = currentPrice - priceRange;
-  const maxPrice = currentPrice + priceRange;
+  useEffect(() => { priceRef.current = currentPrice; }, [currentPrice]);
 
-  const priceToY = (price) => {
-    if (!price || !currentPrice) return null;
-    const ratio = 1 - ((price - minPrice) / (maxPrice - minPrice));
-    return Math.max(0, Math.min(chartHeight, ratio * chartHeight));
-  };
+  const getRange = useCallback(() => {
+    const p = priceRef.current || 1;
+    const r = p * 0.08;
+    return { minP: p - r, maxP: p + r };
+  }, []);
 
-  const yToPrice = (y) => {
-    const ratio = 1 - (y / chartHeight);
-    return minPrice + ratio * (maxPrice - minPrice);
-  };
+  const priceToY = useCallback((price) => {
+    if (!price || !wrapRef.current) return null;
+    const { minP, maxP } = getRange();
+    const h = wrapRef.current.clientHeight;
+    return ((maxP - price) / (maxP - minP)) * h;
+  }, [getRange]);
 
-  const entryY = priceToY(currentPrice);
-  const tpY = tp ? priceToY(parseFloat(tp)) : null;
-  const slY = sl ? priceToY(parseFloat(sl)) : null;
+  const yToPrice = useCallback((y) => {
+    if (!wrapRef.current) return 0;
+    const { minP, maxP } = getRange();
+    const h = wrapRef.current.clientHeight;
+    return maxP - (y / h) * (maxP - minP);
+  }, [getRange]);
 
-  const handleMouseMove = useCallback((e) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const y = clientY - rect.top;
-    const price = yToPrice(y);
-    if (isDraggingTp.current) onTpChange(price.toFixed(2));
-    if (isDraggingSl.current) onSlChange(price.toFixed(2));
-  }, [currentPrice]);
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    const wrap = wrapRef.current;
+    if (!canvas || !wrap || !priceRef.current) return;
+    const w = canvas.width, h = canvas.height;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, w, h);
+    const cp = priceRef.current;
 
-  const handleMouseUp = () => { isDraggingTp.current = false; isDraggingSl.current = false; };
+    function roundRect(x, y, rw, rh, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y); ctx.lineTo(x + rw - r, y);
+      ctx.quadraticCurveTo(x + rw, y, x + rw, y + r);
+      ctx.lineTo(x + rw, y + rh - r);
+      ctx.quadraticCurveTo(x + rw, y + rh, x + rw - r, y + rh);
+      ctx.lineTo(x + r, y + rh);
+      ctx.quadraticCurveTo(x, y + rh, x, y + rh - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function drawLine(price, color, label, pctVal, pnlUsd, isDrag) {
+      const y = priceToY(price);
+      if (y === null || y < 4 || y > h - 4) return;
+
+      // Dashed line with glow
+      ctx.save();
+      ctx.shadowColor = color; ctx.shadowBlur = isDrag ? 16 : 7;
+      ctx.setLineDash([7, 5]);
+      ctx.strokeStyle = color; ctx.lineWidth = isDrag ? 2.5 : 1.8;
+      ctx.globalAlpha = isDrag ? 1 : 0.88;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+      ctx.restore(); ctx.globalAlpha = 1;
+
+      // Left pill
+      const pl = 78, ph = 20;
+      ctx.fillStyle = color;
+      roundRect(4, y - ph / 2, pl, ph, 4); ctx.fill();
+      ctx.fillStyle = '#000'; ctx.font = '700 10px monospace'; ctx.textBaseline = 'middle';
+      ctx.fillText(label, 10, y);
+
+      // Price tag right
+      const ps = `$${parseFloat(price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: price > 10 ? 2 : 5 })}`;
+      ctx.font = '700 10px monospace';
+      const ptw = ctx.measureText(ps).width + 14;
+      ctx.fillStyle = color;
+      roundRect(w - ptw - 4, y - ph / 2, ptw, ph, 4); ctx.fill();
+      ctx.fillStyle = '#000'; ctx.fillText(ps, w - ptw + 5, y);
+
+      // PnL badge center
+      if (pctVal !== null) {
+        const pnlStr = `${pctVal >= 0 ? '+' : ''}${pctVal.toFixed(2)}%   $${Math.abs(pnlUsd).toFixed(2)}`;
+        ctx.font = '700 10px monospace';
+        const bw = ctx.measureText(pnlStr).width + 18, bh = 24;
+        const bx = (w - bw) / 2, by = y - bh / 2;
+        ctx.fillStyle = 'rgba(11,14,17,0.9)';
+        roundRect(bx, by, bw, bh, 5); ctx.fill();
+        ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.setLineDash([]);
+        roundRect(bx, by, bw, bh, 5); ctx.stroke();
+        ctx.fillStyle = color; ctx.fillText(pnlStr, bx + 9, y);
+      }
+
+      // Drag handle
+      ctx.setLineDash([]);
+      ctx.fillStyle = color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+      ctx.shadowColor = color; ctx.shadowBlur = 10;
+      ctx.beginPath(); ctx.arc(w / 2, y, isDrag ? 8 : 6, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke(); ctx.shadowBlur = 0;
+    }
+
+    // Entry line (subtle)
+    const ey = priceToY(cp);
+    if (ey !== null && ey > 0 && ey < h) {
+      ctx.save(); ctx.setLineDash([4, 8]); ctx.strokeStyle = T.entryLine;
+      ctx.lineWidth = 1; ctx.globalAlpha = 0.45;
+      ctx.beginPath(); ctx.moveTo(0, ey); ctx.lineTo(w, ey); ctx.stroke(); ctx.restore();
+      ctx.font = '600 9px monospace'; ctx.fillStyle = T.entryLine; ctx.globalAlpha = 0.6;
+      ctx.textBaseline = 'bottom'; ctx.fillText(`ENTRY  $${parseFloat(cp).toLocaleString()}`, 6, ey - 3);
+      ctx.globalAlpha = 1;
+    }
+
+    const tpVal = tp ? parseFloat(tp) : null;
+    const slVal = sl ? parseFloat(sl) : null;
+
+    if (tpVal && tpVal > 0) {
+      const pct = ((tpVal - cp) / cp) * 100;
+      const usd = Math.abs(pct / 100) * cp;
+      drawLine(tpVal, T.tpLine, '🎯 TP', pct, usd, dragRef.current === 'tp');
+    }
+    if (slVal && slVal > 0) {
+      const pct = ((slVal - cp) / cp) * 100;
+      const usd = Math.abs(pct / 100) * cp;
+      drawLine(slVal, T.slLine, '🛑 SL', pct, usd, dragRef.current === 'sl');
+    }
+
+    // R:R badge
+    if (tpVal && slVal && tpVal > 0 && slVal > 0) {
+      const tpD = Math.abs(tpVal - cp), slD = Math.abs(slVal - cp);
+      const rr = slD > 0 ? (tpD / slD).toFixed(2) : '—';
+      ctx.font = '700 11px monospace';
+      const txt = `R:R = 1:${rr}`;
+      const bw = ctx.measureText(txt).width + 16;
+      ctx.fillStyle = 'rgba(11,14,17,0.88)';
+      roundRect(6, 6, bw, 26, 5); ctx.fill();
+      ctx.strokeStyle = T.yellow; ctx.lineWidth = 1; ctx.setLineDash([]);
+      roundRect(6, 6, bw, 26, 5); ctx.stroke();
+      ctx.fillStyle = T.yellow; ctx.textBaseline = 'middle'; ctx.fillText(txt, 14, 19);
+    }
+  }, [tp, sl, priceToY]);
 
   useEffect(() => {
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    window.addEventListener('touchmove', handleMouseMove, { passive: false });
-    window.addEventListener('touchend', handleMouseUp);
+    const loop = () => { draw(); animRef.current = requestAnimationFrame(loop); };
+    animRef.current = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animRef.current);
+  }, [draw]);
+
+  useEffect(() => {
+    const ro = new ResizeObserver(() => {
+      if (canvasRef.current && wrapRef.current) {
+        canvasRef.current.width = wrapRef.current.clientWidth;
+        canvasRef.current.height = wrapRef.current.clientHeight;
+      }
+    });
+    if (wrapRef.current) ro.observe(wrapRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  const getHit = (clientY) => {
+    if (!wrapRef.current) return null;
+    const rect = wrapRef.current.getBoundingClientRect();
+    const y = clientY - rect.top;
+    const thr = 16;
+    if (tp) { const ty = priceToY(parseFloat(tp)); if (ty !== null && Math.abs(y - ty) < thr) return 'tp'; }
+    if (sl) { const sy = priceToY(parseFloat(sl)); if (sy !== null && Math.abs(y - sy) < thr) return 'sl'; }
+    return null;
+  };
+
+  const onDown = (e) => {
+    const cy = e.touches ? e.touches[0].clientY : e.clientY;
+    const t = getHit(cy);
+    if (t) { dragRef.current = t; e.preventDefault(); }
+  };
+
+  const onMove = useCallback((e) => {
+    if (!dragRef.current || !wrapRef.current) return;
+    const cy = e.touches ? e.touches[0].clientY : e.clientY;
+    const rect = wrapRef.current.getBoundingClientRect();
+    const price = yToPrice(cy - rect.top);
+    const decimals = price > 10 ? 2 : 5;
+    if (dragRef.current === 'tp') onTpChange(price.toFixed(decimals));
+    if (dragRef.current === 'sl') onSlChange(price.toFixed(decimals));
+    e.preventDefault();
+  }, [yToPrice, onTpChange, onSlChange]);
+
+  const onUp = () => { dragRef.current = null; };
+
+  useEffect(() => {
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onUp);
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('touchmove', handleMouseMove);
-      window.removeEventListener('touchend', handleMouseUp);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onUp);
     };
-  }, [handleMouseMove]);
+  }, [onMove]);
 
-  const lineStyle = (color) => ({
-    position: 'absolute', left: 0, right: 0, height: 2,
-    backgroundColor: color, opacity: 0.85,
-    cursor: 'ns-resize', zIndex: 10,
-    boxShadow: `0 0 6px ${color}`
-  });
-
-  const labelStyle = (color) => ({
-    position: 'absolute', right: 8,
-    backgroundColor: color, color: '#000',
-    padding: '2px 8px', borderRadius: 4,
-    fontSize: 11, fontWeight: 700,
-    cursor: 'ns-resize', userSelect: 'none',
-    transform: 'translateY(-50%)', zIndex: 11, whiteSpace: 'nowrap'
-  });
-
-  const handleStyle = (color) => ({
-    position: 'absolute', left: '50%', transform: 'translate(-50%, -50%)',
-    width: 16, height: 16, borderRadius: '50%',
-    backgroundColor: color, cursor: 'ns-resize',
-    border: '2px solid #fff', zIndex: 12, boxShadow: `0 0 8px ${color}`
-  });
-
-  if (!currentPrice) return null;
+  const h = typeof height === 'number' ? height : undefined;
 
   return (
-    <div ref={containerRef} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: chartHeight, pointerEvents: 'none', zIndex: 5 }}>
-      {/* Entry price line */}
-      {entryY !== null && (
-        <div style={{ ...lineStyle(T.entryColor), top: entryY, opacity: 0.6, pointerEvents: 'none' }}>
-          <span style={{ ...labelStyle(T.entryColor), right: 8 }}>ENTRY ${currentPrice?.toLocaleString()}</span>
-        </div>
-      )}
-
-      {/* TP Line */}
-      {tpY !== null && tp && (
-        <div style={{ ...lineStyle(T.tpColor), top: tpY, pointerEvents: 'all' }}
-          onMouseDown={() => { isDraggingTp.current = true; }}
-          onTouchStart={() => { isDraggingTp.current = true; }}>
-          <div style={{ ...handleStyle(T.tpColor), top: 1 }} />
-          <span style={{ ...labelStyle(T.tpColor) }}>TP ${parseFloat(tp).toLocaleString()} ▲</span>
-        </div>
-      )}
-
-      {/* SL Line */}
-      {slY !== null && sl && (
-        <div style={{ ...lineStyle(T.slColor), top: slY, pointerEvents: 'all' }}
-          onMouseDown={() => { isDraggingSl.current = true; }}
-          onTouchStart={() => { isDraggingSl.current = true; }}>
-          <div style={{ ...handleStyle(T.slColor), top: 1 }} />
-          <span style={{ ...labelStyle(T.slColor) }}>SL ${parseFloat(sl).toLocaleString()} ▼</span>
-        </div>
-      )}
-
-      {/* Profit/Loss Preview */}
-      {tp && sl && currentPrice && (
-        <div style={{
-          position: 'absolute', top: 12, left: 12,
-          backgroundColor: 'rgba(30,35,41,0.92)', border: `1px solid ${T.border}`,
-          borderRadius: 8, padding: '8px 12px', fontSize: 11, zIndex: 20, pointerEvents: 'none'
-        }}>
-          <div style={{ color: T.text, marginBottom: 4, fontWeight: 600 }}>RISK/REWARD</div>
-          <div style={{ color: T.green }}>🎯 TP: +{(((parseFloat(tp) - currentPrice) / currentPrice) * 100).toFixed(2)}%</div>
-          <div style={{ color: T.red }}>🛑 SL: {(((parseFloat(sl) - currentPrice) / currentPrice) * 100).toFixed(2)}%</div>
-          {parseFloat(tp) && parseFloat(sl) && (
-            <div style={{ color: T.yellow, marginTop: 4, fontWeight: 700 }}>
-              R:R = 1:{Math.abs((parseFloat(tp) - currentPrice) / (parseFloat(sl) - currentPrice)).toFixed(2)}
-            </div>
-          )}
-        </div>
-      )}
+    <div ref={wrapRef} style={{ position: 'relative', height: h || '100%', background: '#131722', flex: h ? undefined : 1 }}>
+      <iframe
+        key={symbol}
+        src={`https://s.tradingview.com/widgetembed/?symbol=BINANCE%3A${symbol}&interval=15&theme=dark&style=1&locale=en&toolbar_bg=%23161a1e&hide_side_toolbar=0&allow_symbol_change=0&save_image=0`}
+        style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+        title="TradingView"
+      />
+      <canvas
+        ref={canvasRef}
+        onMouseDown={onDown}
+        onTouchStart={onDown}
+        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10, pointerEvents: (tp || sl) ? 'all' : 'none', cursor: 'crosshair' }}
+      />
     </div>
   );
 };
 
-// -------------------- Trade Screen --------------------
-const TradeScreen = () => {
-  const prices = useContext(PriceContext);
+const OrderForm = ({ symbol, currentPrice, tp, setTp, sl, setSl }) => {
   const { user, userData, refreshUser } = useContext(AuthContext);
   const navigate = useNavigate();
-  const hashParams = new URLSearchParams(window.location.hash.includes('?') ? window.location.hash.split('?')[1] : '');
-  const [symbol, setSymbol] = useState(hashParams.get('symbol') || 'BTCUSDT');
   const [orderType, setOrderType] = useState('Market');
+  const [feeType, setFeeType] = useState('taker');
   const [side, setSide] = useState('BUY');
   const [amount, setAmount] = useState('');
-  const [amountPercent, setAmountPercent] = useState(null);
+  const [amtPct, setAmtPct] = useState(null);
   const [limitPrice, setLimitPrice] = useState('');
-  const [leverage, setLeverage] = useState(1);
-  const [tp, setTp] = useState('');
-  const [sl, setSl] = useState('');
+  const [leverage, setLeverage] = useState(10);
   const [msg, setMsg] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [showOrderPanel, setShowOrderPanel] = useState(false);
-  const [showOverlay, setShowOverlay] = useState(true);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  const liveData = prices[symbol] || {};
-  const currentPrice = parseFloat(liveData.price || 0);
   const execPrice = orderType === 'Market' ? currentPrice : parseFloat(limitPrice || currentPrice);
-  const popularPairs = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT'];
+  const bal = parseFloat(userData?.virtualBalance || 0);
+  const amt = parseFloat(amount) || 0;
+  const marginReq = leverage > 0 ? amt / leverage : amt;
+  const feeRate = feeType === 'maker' ? FEES.maker : FEES.taker;
+  const fee = amt * feeRate;
+  const totalCost = marginReq + fee;
+  const tpVal = tp ? parseFloat(tp) : null;
+  const slVal = sl ? parseFloat(sl) : null;
+  const tpPct = tpVal && execPrice ? ((tpVal - execPrice) / execPrice * 100) : null;
+  const slPct = slVal && execPrice ? ((slVal - execPrice) / execPrice * 100) : null;
+  const potProfit = tpPct !== null && amt > 0 ? (Math.abs(tpPct) / 100) * amt * leverage : null;
+  const potLoss = slPct !== null && amt > 0 ? (Math.abs(slPct) / 100) * amt * leverage : null;
 
-  const setAmountByPercent = (pct) => {
-    const bal = userData?.virtualBalance || 0;
-    const amt = ((bal * pct) / 100).toFixed(2);
-    setAmount(amt);
-    setAmountPercent(pct);
-  };
+  const setPct = (pct) => { setAmount(((bal * pct) / 100).toFixed(2)); setAmtPct(pct); };
 
-  // Auto-set TP/SL suggestion
-  const autoSetTPSL = () => {
-    if (!currentPrice) return;
-    const tpPct = side === 'BUY' ? 1.02 : 0.98;
-    const slPct = side === 'BUY' ? 0.98 : 1.02;
-    setTp((currentPrice * tpPct).toFixed(2));
-    setSl((currentPrice * slPct).toFixed(2));
+  const autoTPSL = () => {
+    if (!execPrice) return;
+    const d = execPrice > 10 ? 2 : 5;
+    setTp((execPrice * (side === 'BUY' ? 1.02 : 0.98)).toFixed(d));
+    setSl((execPrice * (side === 'BUY' ? 0.98 : 1.02)).toFixed(d));
   };
 
   const handleTrade = async () => {
     if (!user) return navigate('/login');
-    if (!amount || isNaN(amount) || parseFloat(amount) <= 0) return setMsg({ t: 'error', m: 'Enter a valid amount.' });
-    const amt = parseFloat(amount);
-    const marginReq = amt / leverage;
-    if (marginReq > (userData?.virtualBalance || 0)) return setMsg({ t: 'error', m: `Insufficient balance. Need $${marginReq.toFixed(2)} margin.` });
-
+    if (!amt || amt <= 0) return setMsg({ t: 'e', m: 'Enter valid amount.' });
+    if (totalCost > bal) return setMsg({ t: 'e', m: `Need $${totalCost.toFixed(2)}. Balance: $${bal.toFixed(2)}` });
     setLoading(true);
     try {
-      const userRef = doc(db, 'users', user.uid);
-      await runTransaction(db, async (transaction) => {
-        const userDoc = await transaction.get(userRef);
-        if (!userDoc.exists()) throw new Error('User does not exist!');
-        const currentBalance = userDoc.data().virtualBalance;
-        if (marginReq > currentBalance) throw new Error('Insufficient balance.');
-        const newPosition = {
-          symbol, type: side === 'BUY' ? 'LONG' : 'SHORT',
-          entryPrice: execPrice, leverage, margin: marginReq,
-          totalSize: amt, tp: tp ? parseFloat(tp) : null,
-          sl: sl ? parseFloat(sl) : null,
-          status: 'OPEN', time: new Date().toISOString()
-        };
-        transaction.update(userRef, { virtualBalance: increment(-marginReq), positions: arrayUnion(newPosition) });
+      const ref = doc(db, 'users', user.uid);
+      await runTransaction(db, async tx => {
+        const snap = await tx.get(ref);
+        if (!snap.exists()) throw new Error('User not found');
+        if (totalCost > snap.data().virtualBalance) throw new Error('Insufficient balance');
+        tx.update(ref, {
+          virtualBalance: increment(-totalCost),
+          positions: arrayUnion({ symbol, type: side === 'BUY' ? 'LONG' : 'SHORT', entryPrice: execPrice, leverage, margin: marginReq, totalSize: amt, fee, feeType, tp: tpVal, sl: slVal, status: 'OPEN', time: new Date().toISOString() })
+        });
       });
       await refreshUser();
-      setMsg({ t: 'success', m: `✅ ${side === 'BUY' ? 'LONG' : 'SHORT'} ${symbol} at $${execPrice.toFixed(2)}` });
-      setAmount(''); setTp(''); setSl(''); setAmountPercent(null);
-      if (isMobile) setShowOrderPanel(false);
-    } catch (e) { setMsg({ t: 'error', m: e.message }); }
+      setMsg({ t: 's', m: `✅ ${side === 'BUY' ? 'LONG' : 'SHORT'} ${symbol.replace('USDT', '')} @ $${execPrice.toFixed(2)}` });
+      setAmount(''); setAmtPct(null);
+      setTimeout(() => setMsg(null), 3000);
+    } catch (e) { setMsg({ t: 'e', m: e.message }); }
     setLoading(false);
   };
 
-  const marginReq = amount && !isNaN(amount) ? (parseFloat(amount) / leverage).toFixed(2) : null;
-  const potentialProfit = amount && tp && currentPrice ? ((Math.abs(parseFloat(tp) - execPrice) / execPrice) * parseFloat(amount) * leverage).toFixed(2) : null;
-  const potentialLoss = amount && sl && currentPrice ? ((Math.abs(parseFloat(sl) - execPrice) / execPrice) * parseFloat(amount) * leverage).toFixed(2) : null;
+  return (
+    <div style={{ fontFamily: 'inherit' }}>
+      {/* Order type + fee type row */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5, marginBottom: 8 }}>
+        <div style={{ display: 'flex', background: T.card3, borderRadius: 5, overflow: 'hidden' }}>
+          {['Market', 'Limit'].map(t => (
+            <button key={t} onClick={() => setOrderType(t)} style={{ flex: 1, padding: '7px 0', border: 'none', cursor: 'pointer', background: orderType === t ? T.yellow : 'transparent', color: orderType === t ? '#000' : T.text, fontWeight: 700, fontSize: 11, fontFamily: 'inherit' }}>{t}</button>
+          ))}
+        </div>
+        <div style={{ display: 'flex', background: T.card3, borderRadius: 5, overflow: 'hidden' }}>
+          {['maker', 'taker'].map(f => (
+            <button key={f} onClick={() => setFeeType(f)} style={{ flex: 1, padding: '7px 0', border: 'none', cursor: 'pointer', background: feeType === f ? (f === 'maker' ? T.greenDim : T.yellowDim) : 'transparent', color: feeType === f ? (f === 'maker' ? T.green : T.yellow) : T.text, fontWeight: 700, fontSize: 11, fontFamily: 'inherit' }}>{f === 'maker' ? 'Maker' : 'Taker'}</button>
+          ))}
+        </div>
+      </div>
 
-  const OrderForm = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-      {/* Order type */}
-      <div style={{ display: 'flex', backgroundColor: T.card2, borderRadius: 6, marginBottom: 10 }}>
-        {['Market', 'Limit'].map((t) => (
-          <button key={t} onClick={() => setOrderType(t)} style={{ flex: 1, padding: '8px 0', border: 'none', borderRadius: 6, cursor: 'pointer', backgroundColor: orderType === t ? T.yellow : 'transparent', color: orderType === t ? '#000' : T.text, fontWeight: 600, fontSize: 12 }}>{t}</button>
+      {/* Fee info row */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 5, marginBottom: 8 }}>
+        {[['Maker', '0.02%', T.green], ['Taker', '0.05%', T.yellow], ['Price', `$${parseFloat(currentPrice || 0).toLocaleString()}`, T.white]].map(([l, v, c]) => (
+          <div key={l} style={{ background: T.card3, borderRadius: 5, padding: '5px 7px', textAlign: 'center' }}>
+            <div style={{ color: T.text, fontSize: 9, marginBottom: 2 }}>{l}</div>
+            <div style={{ color: c, fontWeight: 700, fontSize: 11 }}>{v}</div>
+          </div>
         ))}
       </div>
 
-      {/* Buy/Sell */}
-      <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', marginBottom: 12, border: `1px solid ${T.border}` }}>
-        <button onClick={() => setSide('BUY')} style={{ flex: 1, padding: '10px 0', border: 'none', cursor: 'pointer', backgroundColor: side === 'BUY' ? T.green : 'transparent', color: side === 'BUY' ? '#fff' : T.text, fontWeight: 700, fontSize: 13 }}>▲ Long</button>
-        <button onClick={() => setSide('SELL')} style={{ flex: 1, padding: '10px 0', border: 'none', cursor: 'pointer', backgroundColor: side === 'SELL' ? T.red : 'transparent', color: side === 'SELL' ? '#fff' : T.text, fontWeight: 700, fontSize: 13 }}>▼ Short</button>
+      {/* Long / Short */}
+      <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', marginBottom: 10, border: `1px solid ${T.border}` }}>
+        <button onClick={() => setSide('BUY')} style={{ flex: 1, padding: '10px 0', border: 'none', cursor: 'pointer', background: side === 'BUY' ? T.green : 'transparent', color: side === 'BUY' ? '#000' : T.text, fontWeight: 800, fontSize: 13, fontFamily: 'inherit' }}>▲ Long</button>
+        <button onClick={() => setSide('SELL')} style={{ flex: 1, padding: '10px 0', border: 'none', cursor: 'pointer', background: side === 'SELL' ? T.red : 'transparent', color: side === 'SELL' ? '#fff' : T.text, fontWeight: 800, fontSize: 13, fontFamily: 'inherit' }}>▼ Short</button>
       </div>
 
       {userData && (
-        <div style={{ color: T.text, fontSize: 11, marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
-          <span>Available</span>
-          <span style={{ color: T.white, fontWeight: 600 }}>${parseFloat(userData.virtualBalance || 0).toFixed(2)}</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7, fontSize: 11 }}>
+          <span style={{ color: T.text }}>Available</span>
+          <span style={{ color: T.white, fontWeight: 600 }}>${fmt(bal)} USDT</span>
         </div>
       )}
 
       {orderType === 'Limit' && (
-        <div style={{ marginBottom: 8 }}>
-          <label style={{ color: T.text, fontSize: 11, display: 'block', marginBottom: 3 }}>Limit Price (USDT)</label>
-          <Input placeholder={currentPrice.toFixed(2)} value={limitPrice} onChange={(e) => setLimitPrice(e.target.value)} type="number" />
+        <div style={{ marginBottom: 7 }}>
+          <div style={{ color: T.text, fontSize: 11, marginBottom: 3 }}>Limit Price</div>
+          <Inp type="number" placeholder={execPrice.toFixed(2)} value={limitPrice} onChange={e => setLimitPrice(e.target.value)} />
         </div>
       )}
 
-      <div style={{ marginBottom: 8 }}>
-        <label style={{ color: T.text, fontSize: 11, display: 'block', marginBottom: 3 }}>Amount (USDT)</label>
-        <Input placeholder="e.g. 100" value={amount} onChange={(e) => { setAmount(e.target.value); setAmountPercent(null); }} type="number" />
-        <div style={{ display: 'flex', gap: 4, marginTop: 5 }}>
-          {[25, 50, 75, 100].map((pct) => (
-            <button key={pct} onClick={() => setAmountByPercent(pct)} style={{ flex: 1, padding: '4px 0', border: `1px solid ${amountPercent === pct ? T.yellow : T.border}`, borderRadius: 4, backgroundColor: amountPercent === pct ? 'rgba(240,185,11,0.15)' : 'transparent', color: amountPercent === pct ? T.yellow : T.text, fontSize: 10, cursor: 'pointer', fontWeight: 600 }}>{pct}%</button>
+      {/* Amount */}
+      <div style={{ marginBottom: 7 }}>
+        <div style={{ color: T.text, fontSize: 11, marginBottom: 3 }}>Amount (USDT)</div>
+        <Inp type="number" placeholder="0.00" value={amount} onChange={e => { setAmount(e.target.value); setAmtPct(null); }} />
+        <div style={{ display: 'flex', gap: 3, marginTop: 5 }}>
+          {[25, 50, 75, 100].map(p => (
+            <button key={p} onClick={() => setPct(p)} style={{ flex: 1, padding: '4px 0', border: `1px solid ${amtPct === p ? T.yellow : T.border}`, borderRadius: 4, background: amtPct === p ? T.yellowDim : 'transparent', color: amtPct === p ? T.yellow : T.text, fontSize: 10, cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit' }}>{p}%</button>
           ))}
         </div>
       </div>
 
       {/* Leverage */}
-      <div style={{ marginBottom: 12 }}>
+      <div style={{ marginBottom: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-          <label style={{ color: T.text, fontSize: 11 }}>Leverage</label>
-          <span style={{ color: T.yellow, fontSize: 12, fontWeight: 700 }}>{leverage}x</span>
+          <span style={{ color: T.text, fontSize: 11 }}>Leverage</span>
+          <span style={{ color: T.yellow, fontSize: 12, fontWeight: 800, background: T.yellowDim, padding: '1px 8px', borderRadius: 3 }}>{leverage}x</span>
         </div>
-        <input type="range" min={1} max={125} value={leverage} onChange={(e) => setLeverage(parseInt(e.target.value))} style={{ width: '100%', accentColor: T.yellow }} />
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
-          {[1, 5, 10, 25, 50, 100, 125].map((v) => (
-            <button key={v} onClick={() => setLeverage(v)} style={{ background: 'none', border: 'none', color: leverage === v ? T.yellow : T.text, cursor: 'pointer', fontSize: 10, fontWeight: leverage === v ? 800 : 400, padding: '0 2px' }}>{v}x</button>
+        <input type="range" min={1} max={125} value={leverage} onChange={e => setLeverage(+e.target.value)} style={{ width: '100%' }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          {[1, 5, 10, 25, 50, 100, 125].map(v => (
+            <button key={v} onClick={() => setLeverage(v)} style={{ background: 'none', border: 'none', color: leverage === v ? T.yellow : T.text2, cursor: 'pointer', fontSize: 10, fontWeight: leverage === v ? 800 : 400, fontFamily: 'inherit', padding: '1px 0' }}>{v}x</button>
           ))}
         </div>
       </div>
 
-      {/* TP/SL */}
-      <div style={{ marginBottom: 4 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-          <label style={{ color: T.text, fontSize: 11, fontWeight: 600 }}>Take Profit / Stop Loss</label>
-          <button onClick={autoSetTPSL} style={{ background: 'none', border: `1px solid ${T.border}`, color: T.yellow, padding: '2px 7px', borderRadius: 4, fontSize: 10, cursor: 'pointer' }}>Auto</button>
+      {/* TP / SL */}
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+          <span style={{ color: T.text2, fontSize: 11, fontWeight: 700 }}>Take Profit / Stop Loss</span>
+          <button onClick={autoTPSL} style={{ background: T.yellowDim, border: `1px solid ${T.yellow}`, color: T.yellow, padding: '2px 8px', borderRadius: 3, fontSize: 10, cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit' }}>Auto ±2%</button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
           <div>
-            <label style={{ color: T.green, fontSize: 10, display: 'block', marginBottom: 2 }}>🎯 TP Price</label>
-            <Input placeholder="Optional" value={tp} onChange={(e) => setTp(e.target.value)} type="number" style={{ borderColor: tp ? T.green : T.border }} />
+            <div style={{ color: T.green, fontSize: 10, marginBottom: 3, fontWeight: 700 }}>
+              🎯 TP {tpPct !== null && <span>({tpPct >= 0 ? '+' : ''}{tpPct.toFixed(2)}%)</span>}
+            </div>
+            <Inp type="number" placeholder="Price" value={tp} onChange={e => setTp(e.target.value)} style={{ borderColor: tp ? T.green : T.border }} />
+            {potProfit !== null && <div style={{ color: T.green, fontSize: 10, marginTop: 2, fontWeight: 700 }}>+${potProfit.toFixed(2)}</div>}
           </div>
           <div>
-            <label style={{ color: T.red, fontSize: 10, display: 'block', marginBottom: 2 }}>🛑 SL Price</label>
-            <Input placeholder="Optional" value={sl} onChange={(e) => setSl(e.target.value)} type="number" style={{ borderColor: sl ? T.red : T.border }} />
+            <div style={{ color: T.red, fontSize: 10, marginBottom: 3, fontWeight: 700 }}>
+              🛑 SL {slPct !== null && <span>({slPct >= 0 ? '+' : ''}{slPct.toFixed(2)}%)</span>}
+            </div>
+            <Inp type="number" placeholder="Price" value={sl} onChange={e => setSl(e.target.value)} style={{ borderColor: sl ? T.red : T.border }} />
+            {potLoss !== null && <div style={{ color: T.red, fontSize: 10, marginTop: 2, fontWeight: 700 }}>-${potLoss.toFixed(2)}</div>}
           </div>
         </div>
-        {(tp || sl) && (
-          <div style={{ fontSize: 10, color: T.text, marginTop: 4, textAlign: 'center' }}>
-            💡 Drag lines on chart to adjust
-          </div>
-        )}
+        {(tp || sl) && <div style={{ color: T.text, fontSize: 10, marginTop: 4, textAlign: 'center' }}>💡 Drag lines on chart to adjust</div>}
       </div>
 
-      {/* Order Summary */}
-      {amount && !isNaN(amount) && parseFloat(amount) > 0 && (
-        <div style={{ backgroundColor: T.card2, borderRadius: 8, padding: '10px 12px', marginBottom: 10, fontSize: 11 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span style={{ color: T.text }}>Position Size</span>
-            <span style={{ color: T.white, fontWeight: 600 }}>${parseFloat(amount).toFixed(2)}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: marginReq ? 4 : 0 }}>
-            <span style={{ color: T.text }}>Margin Required</span>
-            <span style={{ color: T.yellow, fontWeight: 700 }}>${marginReq}</span>
-          </div>
-          {potentialProfit && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ color: T.text }}>Est. Profit (TP)</span>
-              <span style={{ color: T.green, fontWeight: 600 }}>+${potentialProfit}</span>
+      {/* Summary */}
+      {amt > 0 && (
+        <div style={{ background: T.card3, borderRadius: 6, padding: '9px 11px', marginBottom: 9 }}>
+          <div style={{ fontSize: 10, color: T.text, fontWeight: 700, marginBottom: 5, textTransform: 'uppercase', letterSpacing: 0.5 }}>Order Summary</div>
+          {[
+            ['Position Size', `$${fmt(amt)}`],
+            ['Margin Required', `$${fmt(marginReq)}`, T.yellow],
+            [`Fee (${feeType} ${feeType === 'maker' ? '0.02%' : '0.05%'})`, `-$${fee.toFixed(4)}`, T.red],
+            ['Total Cost', `$${fmt(totalCost)}`, T.white],
+            potProfit !== null ? ['Est. Profit (TP)', `+$${potProfit.toFixed(2)}`, T.green] : null,
+            potLoss !== null ? ['Est. Loss (SL)', `-$${potLoss.toFixed(2)}`, T.red] : null,
+          ].filter(Boolean).map(([l, v, c]) => (
+            <div key={l} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, fontSize: 11 }}>
+              <span style={{ color: T.text }}>{l}</span>
+              <span style={{ color: c || T.text2, fontWeight: 600 }}>{v}</span>
             </div>
-          )}
-          {potentialLoss && (
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: T.text }}>Est. Loss (SL)</span>
-              <span style={{ color: T.red, fontWeight: 600 }}>-${potentialLoss}</span>
-            </div>
-          )}
+          ))}
         </div>
       )}
 
-      {msg && (
-        <div style={{ backgroundColor: msg.t === 'success' ? 'rgba(2,192,118,0.15)' : 'rgba(246,70,93,0.15)', color: msg.t === 'success' ? T.green : T.red, padding: '8px 12px', borderRadius: 6, fontSize: 12, marginBottom: 10 }}>{msg.m}</div>
-      )}
+      {msg && <div style={{ background: msg.t === 's' ? T.greenDim : T.redDim, color: msg.t === 's' ? T.green : T.red, padding: '8px 10px', borderRadius: 5, fontSize: 12, marginBottom: 8, border: `1px solid ${msg.t === 's' ? T.green : T.red}` }}>{msg.m}</div>}
 
       {user
-        ? <Btn color={side === 'BUY' ? T.green : T.red} onClick={handleTrade} disabled={loading}>
-            {loading ? 'Opening...' : `${side === 'BUY' ? '▲ Buy / Long' : '▼ Sell / Short'} ${symbol.replace('USDT', '')}`}
+        ? <Btn bg={side === 'BUY' ? T.green : T.red} tc={side === 'BUY' ? '#000' : '#fff'} onClick={handleTrade} disabled={loading}>
+            {loading ? 'Placing...' : `${side === 'BUY' ? '▲ Buy / Long' : '▼ Sell / Short'}  ${symbol.replace('USDT', '')}`}
           </Btn>
-        : <Link to="/login" style={{ display: 'block', textAlign: 'center', backgroundColor: T.yellow, color: '#000', padding: 12, borderRadius: 6, fontWeight: 'bold', textDecoration: 'none', fontSize: 13 }}>Login to Trade</Link>
+        : <Link to="/login" style={{ display: 'block', textAlign: 'center', background: T.yellow, color: '#000', padding: 11, borderRadius: 6, fontWeight: 700, textDecoration: 'none', fontSize: 13 }}>Login to Trade</Link>
       }
     </div>
   );
+};
+
+const TradeScreen = () => {
+  const prices = useContext(PriceContext);
+  const params = new URLSearchParams(window.location.search || (window.location.hash.includes('?') ? window.location.hash.split('?')[1] : ''));
+  const [symbol, setSymbol] = useState(params.get('symbol') || 'BTCUSDT');
+  const [tp, setTp] = useState('');
+  const [sl, setSl] = useState('');
+  const [showPanel, setShowPanel] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', fn); return () => window.removeEventListener('resize', fn);
+  }, []);
+
+  const liveData = prices[symbol] || {};
+  const currentPrice = parseFloat(liveData.price || 0);
+  const pairs = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'LINKUSDT', 'MATICUSDT'];
 
   return (
-    <div style={{ height: isMobile ? 'calc(100vh - 52px)' : 'auto', display: 'flex', flexDirection: 'column' }}>
-      {/* Symbol Tabs */}
-      <div style={{ display: 'flex', gap: 6, padding: '8px 12px', overflowX: 'auto', backgroundColor: T.card, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
-        {popularPairs.map((s) => (
-          <button key={s} onClick={() => setSymbol(s)} style={{ backgroundColor: symbol === s ? T.yellow : T.card2, color: symbol === s ? '#000' : T.white, border: 'none', padding: '5px 12px', borderRadius: 5, cursor: 'pointer', fontWeight: symbol === s ? 700 : 400, fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0 }}>{s.replace('USDT', '')}</button>
+    <div style={{ display: 'flex', flexDirection: 'column', height: isMobile ? 'calc(100vh - 50px)' : 'auto' }}>
+      {/* Symbol tabs */}
+      <div style={{ display: 'flex', gap: 4, padding: '6px 10px', background: T.card, borderBottom: `1px solid ${T.border}`, overflowX: 'auto', flexShrink: 0 }}>
+        {pairs.map(s => (
+          <button key={s} onClick={() => { setSymbol(s); setTp(''); setSl(''); }} style={{ background: symbol === s ? T.yellow : T.card3, color: symbol === s ? '#000' : T.text2, border: 'none', padding: '5px 11px', borderRadius: 4, cursor: 'pointer', fontWeight: symbol === s ? 800 : 500, fontSize: 12, whiteSpace: 'nowrap', fontFamily: 'inherit' }}>{s.replace('USDT', '')}</button>
         ))}
       </div>
 
-      {/* Price Bar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', backgroundColor: T.bg, borderBottom: `1px solid ${T.border}`, flexShrink: 0, flexWrap: 'wrap' }}>
-        <span style={{ color: T.white, fontWeight: 800, fontSize: 15 }}>{symbol.replace('USDT', '')}/USDT</span>
-        <span style={{ color: T.green, fontWeight: 800, fontSize: 18 }}>${currentPrice.toLocaleString()}</span>
-        <span style={{ color: parseFloat(liveData.change) >= 0 ? T.green : T.red, fontSize: 12 }}>{parseFloat(liveData.change) >= 0 ? '+' : ''}{liveData.change || '0.00'}%</span>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button onClick={() => setShowOverlay(!showOverlay)} style={{ background: showOverlay ? 'rgba(240,185,11,0.15)' : T.card2, border: `1px solid ${showOverlay ? T.yellow : T.border}`, color: showOverlay ? T.yellow : T.text, padding: '4px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 11 }}>
-            {showOverlay ? '📊 Overlay ON' : '📊 Overlay OFF'}
-          </button>
-        </div>
+      {/* Price bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 12px', background: T.bg, borderBottom: `1px solid ${T.border}`, flexShrink: 0, flexWrap: 'wrap' }}>
+        <span style={{ color: T.white, fontWeight: 800, fontSize: 14 }}>{symbol.replace('USDT', '')}/USDT</span>
+        <span style={{ color: parseFloat(liveData.change || 0) >= 0 ? T.green : T.red, fontWeight: 800, fontSize: 18 }}>${parseFloat(currentPrice).toLocaleString()}</span>
+        <span style={{ color: parseFloat(liveData.change || 0) >= 0 ? T.green : T.red, fontSize: 12, background: parseFloat(liveData.change || 0) >= 0 ? T.greenDim : T.redDim, padding: '2px 7px', borderRadius: 3 }}>{parseFloat(liveData.change || 0) >= 0 ? '+' : ''}{liveData.change || '0.00'}%</span>
+        <span style={{ color: T.text, fontSize: 11 }}>H: <b style={{ color: T.text2 }}>${parseFloat(liveData.high || 0).toLocaleString()}</b></span>
+        <span style={{ color: T.text, fontSize: 11 }}>L: <b style={{ color: T.text2 }}>${parseFloat(liveData.low || 0).toLocaleString()}</b></span>
+        <span style={{ color: T.text, fontSize: 11 }}>Vol: <b style={{ color: T.text2 }}>{liveData.vol ? (liveData.vol / 1e6).toFixed(1) + 'M' : '—'}</b></span>
       </div>
 
-      {/* Main Layout */}
       {isMobile ? (
-        // MOBILE: Full screen chart + floating button + slide-up panel
-        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'relative', height: '100%' }}>
-            <iframe
-              key={symbol}
-              src={`https://s.tradingview.com/widgetembed/?symbol=BINANCE%3A${symbol}&interval=15&theme=dark&style=1&locale=en&toolbar_bg=%231e2329&hide_side_toolbar=0&allow_symbol_change=0`}
-              style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
-              title="Chart"
-            />
-            {showOverlay && (
-              <ChartOverlay
-                currentPrice={currentPrice}
-                tp={tp} sl={sl} side={side}
-                onTpChange={setTp} onSlChange={setSl}
-              />
-            )}
-          </div>
+        <div style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <ChartWithOverlay symbol={symbol} currentPrice={currentPrice} tp={tp} sl={sl} onTpChange={setTp} onSlChange={setSl} height="100%" />
 
-          {/* Floating Trade Button */}
-          {!showOrderPanel && (
-            <button
-              onClick={() => setShowOrderPanel(true)}
-              style={{
-                position: 'absolute', bottom: 20, right: 16,
-                backgroundColor: side === 'BUY' ? T.green : T.red,
-                color: '#fff', border: 'none', borderRadius: 28,
-                padding: '14px 24px', fontWeight: 800, fontSize: 15,
-                cursor: 'pointer', boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-                zIndex: 50, display: 'flex', alignItems: 'center', gap: 8
-              }}
-            >
-              {side === 'BUY' ? '▲ Long' : '▼ Short'} {symbol.replace('USDT', '')}
+          {!showPanel && (
+            <button onClick={() => setShowPanel(true)} style={{ position: 'absolute', bottom: 18, right: 14, zIndex: 50, background: T.green, color: '#000', border: 'none', borderRadius: 28, padding: '13px 22px', fontWeight: 900, fontSize: 14, cursor: 'pointer', boxShadow: '0 4px 24px rgba(14,203,129,0.45)', fontFamily: 'inherit' }}>
+              Trade ↗
             </button>
           )}
 
-          {/* Slide-up Order Panel */}
-          {showOrderPanel && (
-            <div style={{
-              position: 'absolute', bottom: 0, left: 0, right: 0,
-              backgroundColor: T.card, borderRadius: '16px 16px 0 0',
-              border: `1px solid ${T.border}`, zIndex: 100,
-              maxHeight: '80vh', overflowY: 'auto',
-              boxShadow: '0 -8px 32px rgba(0,0,0,0.6)'
-            }}>
-              {/* Handle */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px 8px', borderBottom: `1px solid ${T.border}` }}>
-                <div style={{ width: 40, height: 4, backgroundColor: T.border, borderRadius: 2, margin: '0 auto' }} />
-                <button onClick={() => setShowOrderPanel(false)} style={{ background: 'none', border: 'none', color: T.text, fontSize: 20, cursor: 'pointer', position: 'absolute', right: 16, top: 10 }}>✕</button>
+          {showPanel && (
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 100, background: T.card2, borderRadius: '14px 14px 0 0', border: `1px solid ${T.border}`, boxShadow: '0 -8px 40px rgba(0,0,0,0.7)', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ padding: '10px 16px 8px', display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0, borderBottom: `1px solid ${T.border}`, position: 'relative' }}>
+                <div style={{ width: 36, height: 4, background: T.border, borderRadius: 2 }} />
+                <button onClick={() => setShowPanel(false)} style={{ position: 'absolute', right: 14, background: 'none', border: 'none', color: T.text, fontSize: 18, cursor: 'pointer' }}>✕</button>
               </div>
-              <div style={{ padding: '12px 16px 20px' }}>
-                <OrderForm />
+              <div style={{ padding: '12px 14px 28px', overflowY: 'auto', flex: 1 }}>
+                <OrderForm symbol={symbol} currentPrice={currentPrice} tp={tp} setTp={setTp} sl={sl} setSl={setSl} />
               </div>
             </div>
           )}
         </div>
       ) : (
-        // DESKTOP: Chart + Side Panel
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 310px', gap: 0, maxWidth: 1400, margin: '0 auto', width: '100%', padding: 12, gap: 12, boxSizing: 'border-box' }}>
-          <Card style={{ padding: 0, overflow: 'hidden', position: 'relative' }}>
-            <div style={{ position: 'relative' }}>
-              <iframe
-                key={symbol}
-                src={`https://s.tradingview.com/widgetembed/?symbol=BINANCE%3A${symbol}&interval=15&theme=dark&style=1&locale=en&toolbar_bg=%231e2329&hide_side_toolbar=0&allow_symbol_change=0`}
-                style={{ width: '100%', height: 480, border: 'none', display: 'block' }}
-                title="Chart"
-              />
-              {showOverlay && (
-                <ChartOverlay
-                  currentPrice={currentPrice}
-                  tp={tp} sl={sl} side={side}
-                  onTpChange={setTp} onSlChange={setSl}
-                />
-              )}
-            </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 295px', gap: 8, padding: 10, maxWidth: 1400, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+          <Card style={{ overflow: 'hidden', padding: 0 }}>
+            <ChartWithOverlay symbol={symbol} currentPrice={currentPrice} tp={tp} sl={sl} onTpChange={setTp} onSlChange={setSl} height={500} />
           </Card>
-
-          <Card style={{ padding: '14px 14px', overflowY: 'auto', maxHeight: '480px' }}>
-            <OrderForm />
+          <Card style={{ padding: 12, overflowY: 'auto', maxHeight: 500 }}>
+            <OrderForm symbol={symbol} currentPrice={currentPrice} tp={tp} setTp={setTp} sl={sl} setSl={setSl} />
           </Card>
         </div>
       )}
@@ -665,356 +638,363 @@ const TradeScreen = () => {
   );
 };
 
-// -------------------- Home Screen --------------------
 const HomeScreen = () => {
   const prices = useContext(PriceContext);
   const { user } = useContext(AuthContext);
-  const topCoins = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT'];
+  const top = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT'];
   return (
-    <div style={{ padding: '40px 16px', maxWidth: 1100, margin: '0 auto' }}>
-      <div style={{ textAlign: 'center', marginBottom: 60 }}>
-        <h1 style={{ color: T.white, fontSize: 'clamp(26px, 8vw, 42px)', fontWeight: 900, marginBottom: 12 }}>
-          THE ATHARVA <span style={{ color: T.yellow }}>CAPITAL</span>
-        </h1>
-        <p style={{ color: T.text, fontSize: 17, maxWidth: 500, margin: '0 auto 28px' }}>Paper Trade Crypto with $0 risk. Master the markets before going live.</p>
+    <div style={{ padding: '32px 14px', maxWidth: 1100, margin: '0 auto' }}>
+      <div style={{ textAlign: 'center', marginBottom: 48 }}>
+        <div style={{ color: T.text, fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8 }}>Paper Trading Platform</div>
+        <h1 style={{ color: T.white, fontSize: 'clamp(24px,7vw,40px)', fontWeight: 900, marginBottom: 10, lineHeight: 1.1 }}>THE ATHARVA <span style={{ color: T.yellow }}>CAPITAL</span></h1>
+        <p style={{ color: T.text, fontSize: 15, maxWidth: 440, margin: '0 auto 24px' }}>Trade crypto with $0 risk. Live Binance prices, Exness-style drag TP/SL.</p>
         {!user && (
-          <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Link to="/signup" style={{ backgroundColor: T.yellow, color: '#000', padding: '13px 32px', borderRadius: 8, fontWeight: 'bold', textDecoration: 'none', fontSize: 16 }}>Start Trading Free</Link>
-            <Link to="/markets" style={{ backgroundColor: T.card, color: T.white, padding: '13px 32px', borderRadius: 8, fontWeight: 'bold', textDecoration: 'none', fontSize: 16, border: `1px solid ${T.border}` }}>View Markets</Link>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Link to="/signup" style={{ background: T.yellow, color: '#000', padding: '11px 28px', borderRadius: 7, fontWeight: 800, textDecoration: 'none', fontSize: 14 }}>Start Free — $10,000</Link>
+            <Link to="/markets" style={{ background: T.card2, color: T.white, padding: '11px 28px', borderRadius: 7, fontWeight: 700, textDecoration: 'none', fontSize: 14, border: `1px solid ${T.border}` }}>View Markets</Link>
           </div>
         )}
       </div>
-      <h2 style={{ color: T.white, fontSize: 18, marginBottom: 14 }}>🔴 Live Market</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 40 }}>
-        {topCoins.map((sym) => {
-          const d = prices[sym];
-          const chg = d ? parseFloat(d.change) : 0;
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <h2 style={{ color: T.white, fontSize: 15, margin: 0 }}>🔴 Live</h2>
+        <Link to="/markets" style={{ color: T.yellow, fontSize: 12, textDecoration: 'none', fontWeight: 600 }}>All Markets →</Link>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8, marginBottom: 36 }}>
+        {top.map(sym => {
+          const d = prices[sym]; const chg = d ? parseFloat(d.change) : 0;
           return (
             <Link key={sym} to={`/trade?symbol=${sym}`} style={{ textDecoration: 'none' }}>
-              <Card style={{ cursor: 'pointer', borderLeft: `3px solid ${chg >= 0 ? T.green : T.red}`, padding: 14 }}>
-                <div style={{ color: T.white, fontWeight: 700, fontSize: 14 }}>{sym.replace('USDT', '')}</div>
-                <div style={{ color: T.white, fontSize: 17, fontWeight: 800, margin: '5px 0' }}>${d ? parseFloat(d.price).toLocaleString() : '—'}</div>
-                <div style={{ color: chg >= 0 ? T.green : T.red, fontSize: 12, fontWeight: 600 }}>{chg >= 0 ? '+' : ''}{chg}%</div>
-              </Card>
+              <div style={{ background: T.card2, borderRadius: 8, padding: '12px', borderLeft: `3px solid ${chg >= 0 ? T.green : T.red}` }}>
+                <div style={{ color: T.text2, fontWeight: 700, fontSize: 12 }}>{sym.replace('USDT', '')}</div>
+                <div style={{ color: T.white, fontSize: 15, fontWeight: 800, margin: '4px 0' }}>${d ? parseFloat(d.price).toLocaleString() : '—'}</div>
+                <div style={{ color: chg >= 0 ? T.green : T.red, fontSize: 11, fontWeight: 700 }}>{chg >= 0 ? '+' : ''}{chg}%</div>
+              </div>
             </Link>
           );
         })}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
-        {[
-          ['💰', '$10,000 Virtual Balance', 'Start trading with virtual USDT instantly.'],
-          ['📊', 'Live TradingView Charts', 'Pro charts with all indicators.'],
-          ['⚡', 'Real-time Binance Prices', 'Prices streamed live from Binance.'],
-          ['🎯', 'Visual TP/SL Lines', 'Drag-and-drop TP/SL directly on the chart.']
-        ].map(([icon, title, desc]) => (
-          <Card key={title} style={{ padding: 16 }}>
-            <div style={{ fontSize: 26, marginBottom: 8 }}>{icon}</div>
-            <div style={{ color: T.white, fontWeight: 700, marginBottom: 5, fontSize: 14 }}>{title}</div>
-            <div style={{ color: T.text, fontSize: 12 }}>{desc}</div>
-          </Card>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 }}>
+        {[['💰', '$10,000 Virtual', 'Start trading instantly with virtual USDT.'], ['🎯', 'Drag TP/SL Lines', 'Exness-style draggable lines on chart.'], ['💎', 'Maker 0.02% / Taker 0.05%', 'Real exchange fee simulation.'], ['📊', 'Live Binance Data', 'WebSocket real-time prices.'], ['📱', 'Mobile Optimized', 'Full chart + slide-up order panel.'], ['🏆', 'Leaderboard', 'Compete with other traders.']].map(([ic, t, d]) => (
+          <div key={t} style={{ background: T.card2, borderRadius: 9, padding: '13px' }}>
+            <div style={{ fontSize: 22, marginBottom: 6 }}>{ic}</div>
+            <div style={{ color: T.white, fontWeight: 700, marginBottom: 3, fontSize: 12 }}>{t}</div>
+            <div style={{ color: T.text, fontSize: 11 }}>{d}</div>
+          </div>
         ))}
       </div>
     </div>
   );
 };
 
-// -------------------- Markets Screen --------------------
 const MarketsScreen = () => {
   const prices = useContext(PriceContext);
   const { user, userData, refreshUser } = useContext(AuthContext);
   const [search, setSearch] = useState('');
-  const coins = Object.entries(prices).filter(([sym]) => sym.includes(search.toUpperCase())).sort((a, b) => parseFloat(b[1].price) - parseFloat(a[1].price)).slice(0, 60);
+  const [tab, setTab] = useState('all');
 
-  const toggleWatchlist = async (symbol) => {
+  const coins = Object.entries(prices)
+    .filter(([s]) => s.includes(search.toUpperCase()) && (tab === 'all' || userData?.watchlist?.includes(s)))
+    .sort((a, b) => parseFloat(b[1].vol || 0) - parseFloat(a[1].vol || 0))
+    .slice(0, 80);
+
+  const toggleWatch = async (sym) => {
     if (!user) return;
-    const userRef = doc(db, 'users', user.uid);
-    const isInWatchlist = userData?.watchlist?.includes(symbol);
-    try {
-      await updateDoc(userRef, { watchlist: isInWatchlist ? arrayRemove(symbol) : arrayUnion(symbol) });
-      await refreshUser();
-    } catch (e) { console.error(e); }
+    const inList = userData?.watchlist?.includes(sym);
+    await updateDoc(doc(db, 'users', user.uid), { watchlist: inList ? arrayRemove(sym) : arrayUnion(sym) });
+    await refreshUser();
   };
 
   return (
-    <div style={{ padding: 16, maxWidth: 1000, margin: '0 auto' }}>
-      <h2 style={{ color: T.white, marginBottom: 14 }}>Markets</h2>
-      <Input placeholder="Search e.g. BTC, ETH..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ maxWidth: 320, marginBottom: 18 }} />
-      <div style={{ backgroundColor: T.card, borderRadius: 10, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1.5fr 1fr 0.5fr', padding: '10px 16px', borderBottom: `1px solid ${T.border}` }}>
-          {['Pair', 'Price', '24h Change', 'Action', ''].map((h) => <span key={h} style={{ color: T.text, fontSize: 11, fontWeight: 600 }}>{h}</span>)}
+    <div style={{ padding: 12, maxWidth: 1000, margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+        <h2 style={{ color: T.white, margin: 0, fontSize: 17 }}>Markets</h2>
+        <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', background: T.card3, borderRadius: 5, overflow: 'hidden' }}>
+            {[['all', 'All'], ['watchlist', '★ Watch']].map(([v, l]) => (
+              <button key={v} onClick={() => setTab(v)} style={{ padding: '6px 11px', border: 'none', cursor: 'pointer', background: tab === v ? T.yellow : 'transparent', color: tab === v ? '#000' : T.text, fontWeight: 700, fontSize: 11, fontFamily: 'inherit' }}>{l}</button>
+            ))}
+          </div>
+          <Inp placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: 130, padding: '6px 10px' }} />
         </div>
-        {coins.length === 0 ? <div style={{ color: T.text, padding: 40, textAlign: 'center' }}>Loading prices...</div>
+      </div>
+      <Card style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.8fr 1.2fr 1fr 0.5fr', padding: '9px 13px', background: T.card3, borderBottom: `1px solid ${T.border}` }}>
+          {['Pair', 'Price', '24h %', 'Action', ''].map(h => <span key={h} style={{ color: T.text, fontSize: 11, fontWeight: 700 }}>{h}</span>)}
+        </div>
+        {coins.length === 0
+          ? <div style={{ color: T.text, padding: 36, textAlign: 'center', fontSize: 13 }}>No results</div>
           : coins.map(([sym, d]) => {
             const chg = parseFloat(d.change);
-            const isWatched = userData?.watchlist?.includes(sym);
+            const watched = userData?.watchlist?.includes(sym);
             return (
-              <div key={sym} style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1.5fr 1fr 0.5fr', padding: '12px 16px', borderBottom: `1px solid ${T.border}`, alignItems: 'center' }}>
-                <span style={{ color: T.white, fontWeight: 700, fontSize: 13 }}>{sym.replace('USDT', '')}<span style={{ color: T.text, fontWeight: 400 }}>/USDT</span></span>
-                <span style={{ color: T.white, fontWeight: 600, fontSize: 13 }}>${parseFloat(d.price).toLocaleString()}</span>
-                <span style={{ color: chg >= 0 ? T.green : T.red, backgroundColor: chg >= 0 ? 'rgba(2,192,118,0.1)' : 'rgba(246,70,93,0.1)', padding: '2px 8px', borderRadius: 4, fontSize: 12, display: 'inline-block', fontWeight: 600, width: 'fit-content' }}>{chg >= 0 ? '+' : ''}{chg}%</span>
-                <Link to={`/trade?symbol=${sym}`} style={{ color: T.yellow, textDecoration: 'none', fontSize: 12, fontWeight: 600 }}>Trade →</Link>
-                <button onClick={() => toggleWatchlist(sym)} style={{ background: 'none', border: 'none', color: isWatched ? T.yellow : T.text, cursor: 'pointer', fontSize: 16, padding: 0 }}>{isWatched ? '★' : '☆'}</button>
+              <div key={sym} style={{ display: 'grid', gridTemplateColumns: '2fr 1.8fr 1.2fr 1fr 0.5fr', padding: '10px 13px', borderBottom: `1px solid ${T.border2}`, alignItems: 'center' }}>
+                <span style={{ color: T.white, fontWeight: 700, fontSize: 12 }}>{sym.replace('USDT', '')}<span style={{ color: T.text, fontWeight: 400 }}>/USDT</span></span>
+                <span style={{ color: T.white, fontWeight: 600, fontSize: 12 }}>${parseFloat(d.price).toLocaleString()}</span>
+                <span style={{ color: chg >= 0 ? T.green : T.red, background: chg >= 0 ? T.greenDim : T.redDim, padding: '2px 6px', borderRadius: 3, fontSize: 11, fontWeight: 700, display: 'inline-block' }}>{chg >= 0 ? '+' : ''}{chg}%</span>
+                <Link to={`/trade?symbol=${sym}`} style={{ color: T.yellow, textDecoration: 'none', fontSize: 12, fontWeight: 700 }}>Trade →</Link>
+                <button onClick={() => toggleWatch(sym)} style={{ background: 'none', border: 'none', color: watched ? T.yellow : T.text, cursor: 'pointer', fontSize: 15 }}>{watched ? '★' : '☆'}</button>
               </div>
             );
           })}
-      </div>
+      </Card>
     </div>
   );
 };
 
-// -------------------- Dashboard --------------------
 const DashboardScreen = () => {
   const { user, userData, refreshUser } = useContext(AuthContext);
   const prices = useContext(PriceContext);
   const [closeMsg, setCloseMsg] = useState(null);
+  const [tab, setTab] = useState('open');
 
   const positions = userData?.positions || [];
-  let totalUnrealizedPnL = 0;
-  const enriched = positions.map((pos) => {
+  let totalPnL = 0;
+  const enriched = positions.map(pos => {
     const cp = parseFloat(prices[pos.symbol]?.price || pos.entryPrice);
     const pd = pos.type === 'LONG' ? cp - pos.entryPrice : pos.entryPrice - cp;
     const pnl = (pd / pos.entryPrice) * pos.totalSize;
-    const roe = (pnl / pos.margin) * 100;
-    totalUnrealizedPnL += pnl;
+    const roe = pos.margin > 0 ? (pnl / pos.margin) * 100 : 0;
+    totalPnL += pnl;
     return { ...pos, currentPrice: cp, pnl, roe };
   });
 
   const handleClose = async (index) => {
     const pos = enriched[index];
-    const fee = pos.totalSize * 0.0005;
+    const fee = pos.totalSize * FEES.taker;
     const finalPnl = pos.pnl - fee;
-    const closedPosition = { ...pos, exitPrice: pos.currentPrice, realizedPnl: finalPnl, closedAt: new Date().toISOString(), status: 'CLOSED' };
+    const closed = { ...pos, exitPrice: pos.currentPrice, realizedPnl: finalPnl, closedAt: new Date().toISOString(), status: 'CLOSED' };
     try {
-      const userRef = doc(db, 'users', user.uid);
-      await runTransaction(db, async (transaction) => {
-        const userDoc = await transaction.get(userRef);
-        const currentPositions = userDoc.data().positions || [];
-        const newPositions = currentPositions.filter((_, i) => i !== index);
-        const closedPositions = userDoc.data().closedPositions || [];
-        transaction.update(userRef, { virtualBalance: increment(pos.margin + finalPnl), positions: newPositions, closedPositions: [...closedPositions, closedPosition] });
+      const ref = doc(db, 'users', user.uid);
+      await runTransaction(db, async tx => {
+        const snap = await tx.get(ref);
+        const np = snap.data().positions.filter((_, i) => i !== index);
+        const cp2 = snap.data().closedPositions || [];
+        tx.update(ref, { virtualBalance: increment(pos.margin + finalPnl), positions: np, closedPositions: [...cp2, closed] });
       });
       await refreshUser();
-      setCloseMsg({ t: finalPnl >= 0 ? 'success' : 'error', m: `Position closed. PnL: ${finalPnl >= 0 ? '+' : ''}$${finalPnl.toFixed(2)} (fee deducted)` });
-    } catch (e) { setCloseMsg({ t: 'error', m: e.message }); }
+      setCloseMsg({ t: finalPnl >= 0 ? 's' : 'e', m: `Closed. PnL: ${finalPnl >= 0 ? '+' : ''}$${finalPnl.toFixed(2)}` });
+      setTimeout(() => setCloseMsg(null), 3000);
+    } catch (e) { setCloseMsg({ t: 'e', m: e.message }); }
   };
 
-  const equityData = (userData?.closedPositions || []).map((pos, idx) => ({ name: `#${idx + 1}`, pnl: parseFloat(pos.realizedPnl.toFixed(2)) }));
+  const closed = userData?.closedPositions || [];
+  const totalRealized = closed.reduce((s, p) => s + (p.realizedPnl || 0), 0);
+  const wins = closed.filter(p => p.realizedPnl > 0).length;
+  const winRate = closed.length ? ((wins / closed.length) * 100).toFixed(1) : '0';
+  const equityData = closed.map((p, i) => ({ name: `#${i + 1}`, cumPnl: parseFloat(closed.slice(0, i + 1).reduce((s, x) => s + x.realizedPnl, 0).toFixed(2)) }));
 
   return (
-    <div style={{ padding: 16, maxWidth: 1200, margin: '0 auto' }}>
-      <h2 style={{ color: T.white, marginBottom: 18 }}>Dashboard</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
-        <Card style={{ padding: 16 }}><div style={{ color: T.text, fontSize: 11, marginBottom: 5 }}>Virtual Balance</div><div style={{ color: T.white, fontSize: 22, fontWeight: 800 }}>${parseFloat(userData?.virtualBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div></Card>
-        <Card style={{ padding: 16 }}><div style={{ color: T.text, fontSize: 11, marginBottom: 5 }}>Unrealized PnL</div><div style={{ color: totalUnrealizedPnL >= 0 ? T.green : T.red, fontSize: 20, fontWeight: 800 }}>{totalUnrealizedPnL >= 0 ? '+' : ''}${totalUnrealizedPnL.toFixed(2)}</div></Card>
-        <Card style={{ padding: 16 }}><div style={{ color: T.text, fontSize: 11, marginBottom: 5 }}>Open Positions</div><div style={{ color: T.white, fontSize: 22, fontWeight: 800 }}>{positions.length}</div></Card>
-        <Card style={{ padding: 16 }}><div style={{ color: T.text, fontSize: 11, marginBottom: 5 }}>Total Trades</div><div style={{ color: T.white, fontSize: 22, fontWeight: 800 }}>{userData?.closedPositions?.length || 0}</div></Card>
+    <div style={{ padding: 12, maxWidth: 1200, margin: '0 auto' }}>
+      <h2 style={{ color: T.white, marginBottom: 12, fontSize: 17 }}>Dashboard</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginBottom: 14 }}>
+        {[['Balance', `$${fmt(userData?.virtualBalance)}`, T.yellow], ['Unrealized', `${totalPnL >= 0 ? '+' : ''}$${totalPnL.toFixed(2)}`, totalPnL >= 0 ? T.green : T.red], ['Realized', `${totalRealized >= 0 ? '+' : ''}$${totalRealized.toFixed(2)}`, totalRealized >= 0 ? T.green : T.red], ['Win Rate', `${winRate}%`, T.green], ['Open', positions.length, T.white], ['Trades', closed.length, T.white]].map(([l, v, c]) => (
+          <Card key={l} style={{ padding: 11 }}><div style={{ color: T.text, fontSize: 10, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>{l}</div><div style={{ color: c, fontSize: 16, fontWeight: 800 }}>{v}</div></Card>
+        ))}
       </div>
 
-      {equityData.length > 0 && (
-        <Card style={{ marginBottom: 20 }}>
-          <h3 style={{ color: T.white, marginTop: 0, marginBottom: 14, fontSize: 15 }}>Closed PnL History</h3>
-          <ResponsiveContainer width="100%" height={180}>
-            <LineChart data={equityData}>
+      {equityData.length > 1 && (
+        <Card style={{ marginBottom: 12, padding: 13 }}>
+          <div style={{ color: T.white, fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Equity Curve</div>
+          <ResponsiveContainer width="100%" height={150}>
+            <AreaChart data={equityData}>
+              <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={T.green} stopOpacity={0.3} /><stop offset="95%" stopColor={T.green} stopOpacity={0} /></linearGradient></defs>
               <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
-              <XAxis dataKey="name" stroke={T.text} tick={{ fontSize: 11 }} />
-              <YAxis stroke={T.text} tick={{ fontSize: 11 }} />
-              <Tooltip contentStyle={{ backgroundColor: T.card, border: 'none', fontSize: 12 }} labelStyle={{ color: T.white }} />
-              <Line type="monotone" dataKey="pnl" stroke={T.green} strokeWidth={2} dot={{ r: 3, fill: T.green }} />
-            </LineChart>
+              <XAxis dataKey="name" stroke={T.text} tick={{ fontSize: 9 }} />
+              <YAxis stroke={T.text} tick={{ fontSize: 9 }} />
+              <Tooltip contentStyle={{ background: T.card, border: 'none', fontSize: 11 }} />
+              <Area type="monotone" dataKey="cumPnl" stroke={T.green} fill="url(#g)" strokeWidth={2} />
+            </AreaChart>
           </ResponsiveContainer>
         </Card>
       )}
 
-      {closeMsg && <div style={{ backgroundColor: closeMsg.t === 'success' ? 'rgba(2,192,118,0.15)' : 'rgba(246,70,93,0.15)', color: closeMsg.t === 'success' ? T.green : T.red, padding: '10px 14px', borderRadius: 8, marginBottom: 14, fontSize: 13 }}>{closeMsg.m}</div>}
+      {closeMsg && <div style={{ background: closeMsg.t === 's' ? T.greenDim : T.redDim, color: closeMsg.t === 's' ? T.green : T.red, padding: '9px 13px', borderRadius: 6, marginBottom: 10, fontSize: 13, border: `1px solid ${closeMsg.t === 's' ? T.green : T.red}` }}>{closeMsg.m}</div>}
 
-      <h3 style={{ color: T.white, marginBottom: 10, fontSize: 15 }}>Open Positions</h3>
-      {enriched.length === 0 ? (
-        <Card style={{ textAlign: 'center', padding: 36 }}>
-          <div style={{ color: T.text, marginBottom: 14, fontSize: 14 }}>No open positions. Start trading!</div>
-          <Link to="/trade" style={{ backgroundColor: T.yellow, color: '#000', padding: '10px 24px', borderRadius: 6, textDecoration: 'none', fontWeight: 'bold', fontSize: 13 }}>Open a Trade</Link>
-        </Card>
-      ) : enriched.map((pos, i) => (
-        <Card key={i} style={{ marginBottom: 10, borderLeft: `3px solid ${pos.type === 'LONG' ? T.green : T.red}`, padding: 14 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
-            <div style={{ flex: 1 }}>
-              <span style={{ color: pos.type === 'LONG' ? T.green : T.red, fontWeight: 700, fontSize: 15 }}>{pos.symbol} {pos.type} {pos.leverage}x</span>
-              {(pos.tp || pos.sl) && (
-                <span style={{ marginLeft: 10, fontSize: 11, color: T.text }}>
-                  {pos.tp && <span style={{ color: T.green }}>TP ${pos.tp.toFixed(2)} </span>}
-                  {pos.sl && <span style={{ color: T.red }}>SL ${pos.sl.toFixed(2)}</span>}
-                </span>
-              )}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '6px 16px', marginTop: 10 }}>
-                {[['Entry', `$${pos.entryPrice.toFixed(2)}`], ['Mark', `$${pos.currentPrice.toFixed(2)}`], ['Size', `$${pos.totalSize.toFixed(2)}`], ['Margin', `$${pos.margin.toFixed(2)}`], ['PnL', `${pos.pnl >= 0 ? '+' : ''}$${pos.pnl.toFixed(2)}`], ['ROE', `${pos.roe >= 0 ? '+' : ''}${pos.roe.toFixed(2)}%`]].map(([l, v]) => (
-                  <div key={l}><div style={{ color: T.text, fontSize: 10 }}>{l}</div><div style={{ color: (l === 'PnL' || l === 'ROE') ? (pos.pnl >= 0 ? T.green : T.red) : T.white, fontSize: 13, fontWeight: 600 }}>{v}</div></div>
-                ))}
+      <div style={{ display: 'flex', background: T.card3, borderRadius: 5, marginBottom: 10, overflow: 'hidden', width: 'fit-content' }}>
+        {[['open', `Open (${positions.length})`], ['history', `History (${closed.length})`]].map(([v, l]) => (
+          <button key={v} onClick={() => setTab(v)} style={{ padding: '7px 14px', border: 'none', cursor: 'pointer', background: tab === v ? T.yellow : 'transparent', color: tab === v ? '#000' : T.text, fontWeight: 700, fontSize: 11, fontFamily: 'inherit' }}>{l}</button>
+        ))}
+      </div>
+
+      {tab === 'open' && (
+        enriched.length === 0
+          ? <Card style={{ textAlign: 'center', padding: 32 }}><div style={{ color: T.text, marginBottom: 12, fontSize: 13 }}>No open positions.</div><Link to="/trade" style={{ background: T.yellow, color: '#000', padding: '8px 20px', borderRadius: 6, textDecoration: 'none', fontWeight: 700, fontSize: 13 }}>Open Trade</Link></Card>
+          : enriched.map((pos, i) => (
+            <Card key={i} style={{ marginBottom: 7, borderLeft: `3px solid ${pos.type === 'LONG' ? T.green : T.red}`, padding: 11 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7, flexWrap: 'wrap' }}>
+                    <span style={{ color: pos.type === 'LONG' ? T.green : T.red, fontWeight: 800, fontSize: 13 }}>{pos.symbol} {pos.type} {pos.leverage}x</span>
+                    {pos.tp && <span style={{ background: T.greenDim, color: T.green, fontSize: 10, padding: '1px 6px', borderRadius: 3, fontWeight: 700 }}>TP ${parseFloat(pos.tp).toFixed(2)}</span>}
+                    {pos.sl && <span style={{ background: T.redDim, color: T.red, fontSize: 10, padding: '1px 6px', borderRadius: 3, fontWeight: 700 }}>SL ${parseFloat(pos.sl).toFixed(2)}</span>}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(85px, 1fr))', gap: '4px 12px' }}>
+                    {[['Entry', `$${pos.entryPrice.toFixed(2)}`], ['Mark', `$${pos.currentPrice.toFixed(2)}`], ['Size', `$${pos.totalSize.toFixed(2)}`], ['Margin', `$${pos.margin.toFixed(2)}`], ['PnL', `${pos.pnl >= 0 ? '+' : ''}$${pos.pnl.toFixed(2)}`], ['ROE', `${pos.roe >= 0 ? '+' : ''}${pos.roe.toFixed(2)}%`]].map(([l, v]) => (
+                      <div key={l}><div style={{ color: T.text, fontSize: 9 }}>{l}</div><div style={{ color: (l === 'PnL' || l === 'ROE') ? (pos.pnl >= 0 ? T.green : T.red) : T.text2, fontSize: 12, fontWeight: 700 }}>{v}</div></div>
+                    ))}
+                  </div>
+                </div>
+                <button onClick={() => handleClose(i)} style={{ background: T.card3, border: `1px solid ${T.border}`, color: T.white, padding: '6px 12px', borderRadius: 5, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit', flexShrink: 0, alignSelf: 'flex-start' }}>Close</button>
               </div>
-            </div>
-            <button onClick={() => handleClose(i)} style={{ backgroundColor: T.card2, border: `1px solid ${T.border}`, color: T.white, padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontSize: 12, flexShrink: 0 }}>Close</button>
-          </div>
-        </Card>
-      ))}
+            </Card>
+          ))
+      )}
 
-      <h3 style={{ color: T.white, marginTop: 28, marginBottom: 10, fontSize: 15 }}>Order History</h3>
-      {userData?.closedPositions?.length > 0 ? userData.closedPositions.slice().reverse().map((pos, idx) => (
-        <Card key={idx} style={{ marginBottom: 8, opacity: 0.9, padding: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-            <span><span style={{ color: pos.type === 'LONG' ? T.green : T.red, fontWeight: 600, fontSize: 13 }}>{pos.symbol} {pos.type}</span> <span style={{ color: T.text, fontSize: 11 }}>{new Date(pos.closedAt).toLocaleString()}</span></span>
-            <span style={{ color: pos.realizedPnl >= 0 ? T.green : T.red, fontWeight: 700, fontSize: 13 }}>{pos.realizedPnl >= 0 ? '+' : ''}${pos.realizedPnl.toFixed(2)}</span>
-          </div>
-          <div style={{ color: T.text, fontSize: 11, marginTop: 3 }}>Entry ${pos.entryPrice.toFixed(2)} → Exit ${pos.exitPrice.toFixed(2)} | Size ${pos.totalSize.toFixed(2)} | {pos.leverage}x</div>
-        </Card>
-      )) : <Card style={{ textAlign: 'center', padding: 28, color: T.text, fontSize: 13 }}>No closed trades yet.</Card>}
+      {tab === 'history' && (
+        closed.length === 0
+          ? <Card style={{ textAlign: 'center', padding: 28, color: T.text, fontSize: 13 }}>No closed trades yet.</Card>
+          : closed.slice().reverse().map((pos, i) => (
+            <Card key={i} style={{ marginBottom: 6, padding: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 5 }}>
+                <span><span style={{ color: pos.type === 'LONG' ? T.green : T.red, fontWeight: 700, fontSize: 12 }}>{pos.symbol} {pos.type}</span><span style={{ color: T.text, fontSize: 11, marginLeft: 7 }}>{new Date(pos.closedAt).toLocaleDateString()}</span></span>
+                <span style={{ color: pos.realizedPnl >= 0 ? T.green : T.red, fontWeight: 800, fontSize: 13 }}>{pos.realizedPnl >= 0 ? '+' : ''}${pos.realizedPnl.toFixed(2)}</span>
+              </div>
+              <div style={{ color: T.text, fontSize: 11, marginTop: 2 }}>Entry ${pos.entryPrice.toFixed(2)} → Exit ${pos.exitPrice.toFixed(2)} | {pos.leverage}x | Fee -${(pos.fee || 0).toFixed(4)}</div>
+            </Card>
+          ))
+      )}
     </div>
   );
 };
 
-// -------------------- Wallet (Top-up removed) --------------------
 const WalletScreen = () => {
   const { userData } = useContext(AuthContext);
-
+  const closed = userData?.closedPositions || [];
+  const totalFees = closed.reduce((s, p) => s + (p.fee || 0), 0);
+  const totalRealized = closed.reduce((s, p) => s + (p.realizedPnl || 0), 0);
   return (
-    <div style={{ padding: 16, maxWidth: 600, margin: '0 auto' }}>
-      <h2 style={{ color: T.white, marginBottom: 22 }}>Wallet</h2>
-      <Card style={{ marginBottom: 18 }}>
-        <div style={{ color: T.text, fontSize: 12, marginBottom: 5 }}>Total Equity (USDT)</div>
-        <div style={{ color: T.white, fontSize: 34, fontWeight: 900 }}>${parseFloat(userData?.virtualBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-        <div style={{ color: T.text, fontSize: 11, marginTop: 6 }}>Paper trading account • No real funds</div>
+    <div style={{ padding: 14, maxWidth: 560, margin: '0 auto' }}>
+      <h2 style={{ color: T.white, marginBottom: 16, fontSize: 17 }}>Wallet</h2>
+      <Card style={{ marginBottom: 12, padding: 18 }}>
+        <div style={{ color: T.text, fontSize: 11, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Total Equity</div>
+        <div style={{ color: T.white, fontSize: 30, fontWeight: 900 }}>${fmt(userData?.virtualBalance)}</div>
+        <div style={{ color: T.text, fontSize: 11, marginTop: 4 }}>Paper trading • No real funds</div>
       </Card>
-      <Card>
-        <div style={{ color: T.white, fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Assets</div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 14, borderBottom: `1px solid ${T.border}` }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: '50%', backgroundColor: '#26A17B', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 12 }}>₮</div>
-            <div><div style={{ color: T.white, fontWeight: 600 }}>USDT</div><div style={{ color: T.text, fontSize: 11 }}>Tether</div></div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
+        {[['Realized PnL', `${totalRealized >= 0 ? '+' : ''}$${totalRealized.toFixed(2)}`, totalRealized >= 0 ? T.green : T.red], ['Trades', closed.length, T.white], ['Fees Paid', `-$${totalFees.toFixed(4)}`, T.red]].map(([l, v, c]) => (
+          <Card key={l} style={{ padding: 11, textAlign: 'center' }}><div style={{ color: T.text, fontSize: 10, marginBottom: 3 }}>{l}</div><div style={{ color: c, fontWeight: 800, fontSize: 13 }}>{v}</div></Card>
+        ))}
+      </div>
+      <Card style={{ padding: 15 }}>
+        <div style={{ color: T.white, fontWeight: 700, marginBottom: 12, fontSize: 13 }}>Assets</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, borderBottom: `1px solid ${T.border}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#26A17B', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 12 }}>₮</div>
+            <div><div style={{ color: T.white, fontWeight: 600, fontSize: 13 }}>USDT</div><div style={{ color: T.text, fontSize: 11 }}>TetherUS</div></div>
           </div>
-          <div style={{ textAlign: 'right' }}><div style={{ color: T.white, fontWeight: 700 }}>{parseFloat(userData?.virtualBalance || 0).toFixed(2)}</div><div style={{ color: T.text, fontSize: 11 }}>Available</div></div>
+          <div style={{ textAlign: 'right' }}><div style={{ color: T.white, fontWeight: 700, fontSize: 13 }}>{fmt(userData?.virtualBalance)}</div><div style={{ color: T.text, fontSize: 11 }}>Available</div></div>
         </div>
-        <div style={{ color: T.text, textAlign: 'center', padding: '16px 0', fontSize: 12 }}>All funds are in USDT. Start trading to open positions.</div>
-        <Link to="/trade" style={{ display: 'block', textAlign: 'center', backgroundColor: T.yellow, color: '#000', padding: '10px 0', borderRadius: 6, fontWeight: 700, textDecoration: 'none', fontSize: 13, marginTop: 8 }}>Start Trading →</Link>
+        <Link to="/trade" style={{ display: 'block', textAlign: 'center', background: T.yellow, color: '#000', padding: '10px 0', borderRadius: 6, fontWeight: 800, textDecoration: 'none', fontSize: 13, marginTop: 12 }}>Open a Trade →</Link>
       </Card>
     </div>
   );
 };
 
-// -------------------- Leaderboard --------------------
 const LeaderboardScreen = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-
+  const { userData: myData } = useContext(AuthContext);
   useEffect(() => {
-    const fetchLeaderboard = async () => {
+    (async () => {
       try {
         const q = query(collection(db, 'users'), orderBy('virtualBalance', 'desc'), limit(20));
-        const snapshot = await getDocs(q);
-        const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        setUsers(data);
+        const snap = await getDocs(q);
+        setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       } catch (e) { console.error(e); }
       setLoading(false);
-    };
-    fetchLeaderboard();
+    })();
   }, []);
-
   return (
-    <div style={{ padding: 16, maxWidth: 800, margin: '0 auto' }}>
-      <h2 style={{ color: T.white, marginBottom: 18 }}>🏆 Leaderboard</h2>
+    <div style={{ padding: 14, maxWidth: 760, margin: '0 auto' }}>
+      <h2 style={{ color: T.white, marginBottom: 14, fontSize: 17 }}>🏆 Leaderboard</h2>
       <Card style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '0.5fr 2fr 1.5fr', padding: '12px 18px', borderBottom: `1px solid ${T.border}`, backgroundColor: T.card2 }}>
-          <span style={{ color: T.text, fontWeight: 600, fontSize: 12 }}>#</span>
-          <span style={{ color: T.text, fontWeight: 600, fontSize: 12 }}>Trader</span>
-          <span style={{ color: T.text, fontWeight: 600, textAlign: 'right', fontSize: 12 }}>Balance</span>
+        <div style={{ display: 'grid', gridTemplateColumns: '0.4fr 2fr 1.5fr 1fr', padding: '9px 15px', background: T.card3, borderBottom: `1px solid ${T.border}` }}>
+          {['#', 'Trader', 'Balance', 'Trades'].map(h => <span key={h} style={{ color: T.text, fontSize: 11, fontWeight: 700 }}>{h}</span>)}
         </div>
-        {loading ? <div style={{ color: T.text, padding: 40, textAlign: 'center' }}>Loading...</div>
-          : users.map((u, idx) => (
-            <div key={u.uid} style={{ display: 'grid', gridTemplateColumns: '0.5fr 2fr 1.5fr', padding: '12px 18px', borderBottom: `1px solid ${T.border}`, alignItems: 'center' }}>
-              <span style={{ color: idx < 3 ? T.yellow : T.white, fontWeight: 700, fontSize: idx < 3 ? 16 : 14 }}>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}</span>
-              <span style={{ color: T.white, fontSize: 13 }}>{u.name || 'Anonymous'}</span>
-              <span style={{ color: T.green, fontWeight: 700, textAlign: 'right', fontSize: 13 }}>${u.virtualBalance?.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-            </div>
-          ))}
+        {loading ? <div style={{ color: T.text, padding: 36, textAlign: 'center' }}>Loading...</div>
+          : users.map((u, i) => {
+            const isMe = u.uid === myData?.uid;
+            return (
+              <div key={u.uid} style={{ display: 'grid', gridTemplateColumns: '0.4fr 2fr 1.5fr 1fr', padding: '10px 15px', borderBottom: `1px solid ${T.border2}`, alignItems: 'center', background: isMe ? T.yellowDim : 'transparent' }}>
+                <span style={{ color: i < 3 ? T.yellow : T.text, fontWeight: 700, fontSize: i < 3 ? 15 : 12 }}>{['🥇', '🥈', '🥉'][i] || i + 1}</span>
+                <span style={{ color: isMe ? T.yellow : T.white, fontSize: 13, fontWeight: isMe ? 700 : 400 }}>{u.name || 'Anon'}{isMe ? ' (you)' : ''}</span>
+                <span style={{ color: T.green, fontWeight: 700, fontSize: 13 }}>${fmt(u.virtualBalance)}</span>
+                <span style={{ color: T.text2, fontSize: 12 }}>{(u.closedPositions || []).length}</span>
+              </div>
+            );
+          })}
       </Card>
     </div>
   );
 };
 
-// -------------------- Auth Screens --------------------
+const AuthCard = ({ sub, children }) => (
+  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', padding: 14 }}>
+    <Card style={{ width: '100%', maxWidth: 360, padding: '26px 22px' }}>
+      <div style={{ color: T.yellow, fontWeight: 900, fontSize: 17, textAlign: 'center', marginBottom: 3 }}>⚡ ATHARVA CAPITAL</div>
+      <div style={{ color: T.text, textAlign: 'center', marginBottom: 22, fontSize: 12 }}>{sub}</div>
+      {children}
+    </Card>
+  </div>
+);
+
 const LoginScreen = () => {
   const { login } = useContext(AuthContext);
-  const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleLogin = async () => {
-    if (!email || !password) return setError('Enter email and password.');
-    setLoading(true); setError('');
-    try { await login(email, password); navigate('/dashboard'); }
-    catch (e) { setError(e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password' ? 'Invalid email or password.' : e.message); }
-    setLoading(false);
+  const nav = useNavigate();
+  const [email, setEmail] = useState(''); const [pw, setPw] = useState(''); const [err, setErr] = useState(''); const [load, setLoad] = useState(false);
+  const go = async () => {
+    if (!email || !pw) return setErr('Fill all fields.');
+    setLoad(true); setErr('');
+    try { await login(email, pw); nav('/dashboard'); }
+    catch (e) { setErr(e.code === 'auth/invalid-credential' ? 'Invalid credentials.' : e.message); }
+    setLoad(false);
   };
-
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', padding: 16 }}>
-      <Card style={{ width: '100%', maxWidth: 380 }}>
-        <div style={{ color: T.yellow, fontWeight: 900, fontSize: 20, textAlign: 'center', marginBottom: 6 }}>ATHARVA CAPITAL</div>
-        <div style={{ color: T.text, textAlign: 'center', marginBottom: 24, fontSize: 13 }}>Welcome back</div>
-        <label style={{ color: T.text, fontSize: 12, display: 'block', marginBottom: 4 }}>Email</label>
-        <Input placeholder="you@email.com" value={email} onChange={(e) => setEmail(e.target.value)} type="email" style={{ marginBottom: 12 }} />
-        <label style={{ color: T.text, fontSize: 12, display: 'block', marginBottom: 4 }}>Password</label>
-        <Input placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} type="password" style={{ marginBottom: 16 }} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} />
-        {error && <div style={{ color: T.red, fontSize: 12, marginBottom: 10 }}>{error}</div>}
-        <Btn onClick={handleLogin} disabled={loading}>{loading ? 'Logging in...' : 'Login'}</Btn>
-        <div style={{ textAlign: 'center', marginTop: 16, color: T.text, fontSize: 13 }}>New here? <Link to="/signup" style={{ color: T.yellow, fontWeight: 600, textDecoration: 'none' }}>Create Account</Link></div>
-      </Card>
-    </div>
+    <AuthCard sub="Welcome back">
+      <div style={{ color: T.text, fontSize: 11, marginBottom: 3 }}>Email</div>
+      <Inp type="email" placeholder="you@email.com" value={email} onChange={e => setEmail(e.target.value)} style={{ marginBottom: 11 }} />
+      <div style={{ color: T.text, fontSize: 11, marginBottom: 3 }}>Password</div>
+      <Inp type="password" placeholder="••••••••" value={pw} onChange={e => setPw(e.target.value)} style={{ marginBottom: 15 }} onKeyDown={e => e.key === 'Enter' && go()} />
+      {err && <div style={{ color: T.red, fontSize: 12, marginBottom: 9 }}>{err}</div>}
+      <Btn onClick={go} disabled={load}>{load ? 'Logging in...' : 'Login'}</Btn>
+      <div style={{ textAlign: 'center', marginTop: 13, color: T.text, fontSize: 12 }}>New? <Link to="/signup" style={{ color: T.yellow, fontWeight: 700, textDecoration: 'none' }}>Create Account</Link></div>
+    </AuthCard>
   );
 };
 
 const SignupScreen = () => {
   const { signUp } = useContext(AuthContext);
-  const navigate = useNavigate();
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleSignup = async () => {
-    if (!email || !password) return setError('Fill in all fields.');
-    if (password.length < 6) return setError('Password must be at least 6 characters.');
-    setLoading(true); setError('');
-    try { await signUp(email, password, name); navigate('/dashboard'); }
-    catch (e) { setError(e.code === 'auth/email-already-in-use' ? 'This email is already registered.' : e.message); }
-    setLoading(false);
+  const nav = useNavigate();
+  const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [pw, setPw] = useState(''); const [err, setErr] = useState(''); const [load, setLoad] = useState(false);
+  const go = async () => {
+    if (!email || !pw) return setErr('Fill all fields.');
+    if (pw.length < 6) return setErr('Password min 6 chars.');
+    setLoad(true); setErr('');
+    try { await signUp(email, pw, name); nav('/dashboard'); }
+    catch (e) { setErr(e.code === 'auth/email-already-in-use' ? 'Email already used.' : e.message); }
+    setLoad(false);
   };
-
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', padding: 16 }}>
-      <Card style={{ width: '100%', maxWidth: 380 }}>
-        <div style={{ color: T.yellow, fontWeight: 900, fontSize: 20, textAlign: 'center', marginBottom: 6 }}>ATHARVA CAPITAL</div>
-        <div style={{ color: T.text, textAlign: 'center', marginBottom: 24, fontSize: 13 }}>Get $10,000 virtual USDT to trade with</div>
-        <label style={{ color: T.text, fontSize: 12, display: 'block', marginBottom: 4 }}>Your Name</label>
-        <Input placeholder="Atharva" value={name} onChange={(e) => setName(e.target.value)} style={{ marginBottom: 12 }} />
-        <label style={{ color: T.text, fontSize: 12, display: 'block', marginBottom: 4 }}>Email</label>
-        <Input placeholder="you@email.com" value={email} onChange={(e) => setEmail(e.target.value)} type="email" style={{ marginBottom: 12 }} />
-        <label style={{ color: T.text, fontSize: 12, display: 'block', marginBottom: 4 }}>Password</label>
-        <Input placeholder="Min 6 characters" value={password} onChange={(e) => setPassword(e.target.value)} type="password" style={{ marginBottom: 16 }} onKeyDown={(e) => e.key === 'Enter' && handleSignup()} />
-        {error && <div style={{ color: T.red, fontSize: 12, marginBottom: 10 }}>{error}</div>}
-        <Btn onClick={handleSignup} disabled={loading}>{loading ? 'Creating account...' : 'Create Account & Get $10,000'}</Btn>
-        <div style={{ textAlign: 'center', marginTop: 16, color: T.text, fontSize: 13 }}>Already registered? <Link to="/login" style={{ color: T.yellow, fontWeight: 600, textDecoration: 'none' }}>Login</Link></div>
-      </Card>
-    </div>
+    <AuthCard sub="Get $10,000 virtual USDT — free">
+      <div style={{ color: T.text, fontSize: 11, marginBottom: 3 }}>Name</div>
+      <Inp placeholder="Atharva" value={name} onChange={e => setName(e.target.value)} style={{ marginBottom: 9 }} />
+      <div style={{ color: T.text, fontSize: 11, marginBottom: 3 }}>Email</div>
+      <Inp type="email" placeholder="you@email.com" value={email} onChange={e => setEmail(e.target.value)} style={{ marginBottom: 9 }} />
+      <div style={{ color: T.text, fontSize: 11, marginBottom: 3 }}>Password</div>
+      <Inp type="password" placeholder="Min 6 chars" value={pw} onChange={e => setPw(e.target.value)} style={{ marginBottom: 15 }} onKeyDown={e => e.key === 'Enter' && go()} />
+      {err && <div style={{ color: T.red, fontSize: 12, marginBottom: 9 }}>{err}</div>}
+      <Btn onClick={go} disabled={load}>{load ? 'Creating...' : 'Create Account & Get $10,000'}</Btn>
+      <div style={{ textAlign: 'center', marginTop: 13, color: T.text, fontSize: 12 }}>Have account? <Link to="/login" style={{ color: T.yellow, fontWeight: 700, textDecoration: 'none' }}>Login</Link></div>
+    </AuthCard>
   );
 };
 
-// -------------------- App --------------------
 export default function App() {
   return (
     <AuthProvider>
       <PriceProvider>
         <Router>
-          <div style={{ backgroundColor: T.bg, minHeight: '100vh', color: T.white, fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
+          <div style={{ background: T.bg, minHeight: '100vh', color: T.white, fontFamily: '"SF Pro Display", -apple-system, BlinkMacSystemFont, sans-serif' }}>
             <Navbar />
             <Routes>
               <Route path="/" element={<HomeScreen />} />
