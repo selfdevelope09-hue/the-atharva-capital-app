@@ -1,8 +1,10 @@
-import { AppRegistry } from 'react-native';
+import React from 'react';
+import ReactDOM from 'react-dom/client';
 import App from './App';
 
-AppRegistry.registerComponent('App', () => App);
-AppRegistry.runApplication('App', {
-  initialProps: {},
-  rootTag: document.getElementById('root'),
-});
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
