@@ -314,7 +314,7 @@ const ChartWithOverlay = ({ symbol, currentPrice, tp, sl, entryPrice, onTpChange
       roundRect(6, 6, bw, 28, 6); ctx.stroke();
       ctx.fillStyle = T.yellow; ctx.textBaseline = 'middle'; ctx.fillText(txt, 15, 20);
     }
-  }, [tp, sl, priceToY, viewOnly, refPrice]);
+  const [refPrice, setRefPrice] = useState(0); // File ke upar wale hisse mein
 
   useEffect(() => {
     const loop = () => { draw(); animRef.current = requestAnimationFrame(loop); };
