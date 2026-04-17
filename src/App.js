@@ -376,10 +376,10 @@ const ChartWithOverlay = ({ symbol, currentPrice, tp, sl, entryPrice, onTpChange
     };
   }, [onMove]);
 
-  const h = typeof height === 'number' ? height : undefined;
+  const h2 = typeof height === 'number' ? height : undefined;
 
   return (
-    <div ref={wrapRef} style={{ position: 'relative', height: h || '100%', background: '#131722', flex: h ? undefined : 1 }}>
+    <div ref={wrapRef} style={{ position: 'relative', height: h2 || '100%', background: '#131722', flex: h2 ? undefined : 1 }}>
       <iframe
         key={symbol}
         src={`https://s.tradingview.com/widgetembed/?symbol=BINANCE%3A${symbol}&interval=15&theme=dark&style=1&locale=en&toolbar_bg=%23161a1e&hide_side_toolbar=0&allow_symbol_change=0&save_image=0`}
