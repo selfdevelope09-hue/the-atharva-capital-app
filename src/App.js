@@ -142,6 +142,10 @@ const Navbar = () => {
         .card-hover:hover{border-color:${T.yellow}!important;transform:translateY(-2px);transition:all 0.2s}
         .star-btn:hover{transform:scale(1.3);transition:transform 0.15s}
         .pos-row:hover{background:${T.card3}!important;cursor:pointer}
+        :fullscreen #trade-screen, :-webkit-full-screen #trade-screen, :-moz-full-screen #trade-screen {
+          position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;z-index:9999!important;overflow:auto!important;background:${T.bg}!important;
+        }
+        :fullscreen, :-webkit-full-screen, :-moz-full-screen { background:${T.bg}!important; }
       `}</style>
       <nav style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 18px', height: 54, background: T.card, borderBottom: `1px solid ${T.border}`, position: 'sticky', top: 0, zIndex: 500 }}>
         <Link to="/" style={{ color: T.yellow, fontWeight: 900, textDecoration: 'none', fontSize: 15, letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -174,7 +178,9 @@ const Navbar = () => {
 };
 
 // ─── CHART WITH OVERLAY ───────────────────────────────────────────────────────
-// viewOnly = true means no drag, just display lines (for position view)
+// KEY INSIGHT: TradingView chart auto-scrolls with live price.
+// Our canvas overlay must ALWAYS use live currentPrice as center of range.
+// This way TP/SL lines stay locked relative to where the chart shows them.
 const ChartWithOverlay = ({ symbol, currentPrice, tp, sl, entryPrice, onTpChange, onSlChange, height = 460, viewOnly = false }) => {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
@@ -182,20 +188,23 @@ const ChartWithOverlay = ({ symbol, currentPrice, tp, sl, entryPrice, onTpChange
   const animRef = useRef(null);
   const priceRef = useRef(currentPrice);
 
+  // Always keep priceRef synced with latest live price
   useEffect(() => { priceRef.current = currentPrice; }, [currentPrice]);
 
-  const refPrice = entryPrice || currentPrice;
-
+  // CRITICAL: getRange must ALWAYS use live price (priceRef.current), never a fixed entryPrice.
+  // TradingView chart centers on live price. Our overlay must match that.
   const getRange = useCallback(() => {
-    const p = refPrice || priceRef.current || 1;
-    const r = p * 0.08;
+    const p = priceRef.current || 1;
+    // Use 6% range — matches TradingView's default auto-scale roughly
+    const r = p * 0.06;
     return { minP: p - r, maxP: p + r };
-  }, [refPrice]);
+  }, []); // no deps — always reads fresh from priceRef
 
   const priceToY = useCallback((price) => {
     if (!price || !wrapRef.current) return null;
     const { minP, maxP } = getRange();
     const h = wrapRef.current.clientHeight;
+    if (price < minP || price > maxP) return null; // outside visible range
     return ((maxP - price) / (maxP - minP)) * h;
   }, [getRange]);
 
@@ -213,7 +222,7 @@ const ChartWithOverlay = ({ symbol, currentPrice, tp, sl, entryPrice, onTpChange
     const w = canvas.width, h = canvas.height;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, w, h);
-    const cp = priceRef.current || refPrice;
+    const cp = priceRef.current;
     if (!cp) return;
 
     function roundRect(x, y, rw, rh, r) {
@@ -633,12 +642,13 @@ const TradeScreen = () => {
     window.addEventListener('resize', fn); return () => window.removeEventListener('resize', fn);
   }, []);
 
-  // Fullscreen API
+  // Fullscreen API — use document.documentElement for TRUE full browser fullscreen
   const enterFullscreen = async () => {
     try {
-      if (containerRef.current?.requestFullscreen) await containerRef.current.requestFullscreen();
-      else if (containerRef.current?.webkitRequestFullscreen) await containerRef.current.webkitRequestFullscreen();
-      setIsFullscreen(true);
+      const el = document.documentElement;
+      if (el.requestFullscreen) await el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+      else if (el.mozRequestFullScreen) await el.mozRequestFullScreen();
     } catch (e) { console.log(e); }
   };
 
@@ -646,7 +656,7 @@ const TradeScreen = () => {
     try {
       if (document.exitFullscreen) await document.exitFullscreen();
       else if (document.webkitExitFullscreen) await document.webkitExitFullscreen();
-      setIsFullscreen(false);
+      else if (document.mozCancelFullScreen) await document.mozCancelFullScreen();
     } catch (e) { console.log(e); }
   };
 
@@ -667,7 +677,7 @@ const TradeScreen = () => {
   const pairs = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'LINKUSDT', 'MATICUSDT'];
 
   return (
-    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', height: isMobile ? 'calc(100vh - 54px)' : 'auto', background: T.bg }}>
+    <div id="trade-screen" ref={containerRef} style={{ display: 'flex', flexDirection: 'column', height: isMobile ? 'calc(100vh - 54px)' : isFullscreen ? '100vh' : 'auto', background: T.bg, overflow: isFullscreen ? 'hidden' : 'visible' }}>
       {/* Symbol tabs */}
       <div style={{ display: 'flex', gap: 4, padding: '6px 10px', background: T.card, borderBottom: `1px solid ${T.border}`, overflowX: 'auto', flexShrink: 0 }}>
         {pairs.map(s => (
@@ -716,11 +726,11 @@ const TradeScreen = () => {
           )}
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 8, padding: 10, maxWidth: isFullscreen ? '100%' : 1500, margin: '0 auto', width: '100%', boxSizing: 'border-box', flex: isFullscreen ? 1 : 'none' }}>
-          <Card style={{ overflow: 'hidden', padding: 0, display: 'flex', flexDirection: 'column' }}>
-            <ChartWithOverlay symbol={symbol} currentPrice={currentPrice} tp={tp} sl={sl} onTpChange={setTp} onSlChange={setSl} height={isFullscreen ? undefined : 520} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 8, padding: isFullscreen ? '6px 8px' : 10, maxWidth: '100%', margin: '0 auto', width: '100%', boxSizing: 'border-box', flex: 1 }}>
+          <Card style={{ overflow: 'hidden', padding: 0, display: 'flex', flexDirection: 'column', height: isFullscreen ? 'calc(100vh - 130px)' : 520 }}>
+            <ChartWithOverlay symbol={symbol} currentPrice={currentPrice} tp={tp} sl={sl} onTpChange={setTp} onSlChange={setSl} height={isFullscreen ? '100%' : 520} />
           </Card>
-          <Card style={{ padding: 12, overflowY: 'auto', maxHeight: isFullscreen ? 'calc(100vh - 110px)' : 520 }}>
+          <Card style={{ padding: 12, overflowY: 'auto', height: isFullscreen ? 'calc(100vh - 130px)' : 520 }}>
             <OrderForm symbol={symbol} currentPrice={currentPrice} tp={tp} setTp={setTp} sl={sl} setSl={setSl} />
           </Card>
         </div>
