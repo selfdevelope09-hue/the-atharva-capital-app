@@ -5,8 +5,7 @@ export const executeAdvancedTrade = async (userId, data) => {
   const { symbol, price, amount, leverage, type, tp, sl } = data;
   const userRef = doc(db, "users", userId);
   
-  // Margin calculation: Agar 100 USDT ka trade hai 10x leverage par, 
-  // toh user ke wallet se sirf 10 USDT kategi (Margin).
+  // Margin: e.g. 100 USDT notional at 10x → 10 USDT margin from wallet
   const marginRequired = amount / leverage;
 
   try {

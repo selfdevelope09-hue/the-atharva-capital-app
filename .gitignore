@@ -1,1 +1,32 @@
 node_modules
+dist
+build
+.firebase
+.expo
+.vercel
+*.log
+.env*.local
+.env.production
+.env.vercel.*
+serviceAccount.json
+**/serviceAccount.json
+scripts/server-one-paste-bootstrap.sh
+.deploy-keys/
+
+# Mobile release binaries (build locally; do not commit)
+*.apk
+*.aab
+
+# Generated during one-off App splits (do not commit)
+src/screens/_extracted/
+src/screens/_remaining_raw.txt
+
+# Android / Capacitor (keep `android/` in git; ignore local build outputs)
+android/app/build/
+android/.gradle/
+android/local.properties
+android/*.iml
+android/captures/
+android/keystore.properties
+android/*.keystore
+android/*.jks

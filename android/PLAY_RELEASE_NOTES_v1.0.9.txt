@@ -1,0 +1,17 @@
+What's new in v1.0.9
+
+• Faster, smoother app — fixed hangs and blank screens on Markets & Trade
+• Chart and trading page load reliably again
+• Paid plan free trading resets (Basic: 3, Pro: 5) — Wallet & Leaderboard
+• Plan balances on reset: Basic $20,000 · Pro $50,000
+• Ads restored on Leaderboard, Markets & Creds (Chat & Trade stay ad-free)
+• Bottom navigation and UI touch fixes
+• General stability improvements
+
+—
+Hindi (Play Store optional):
+
+• App ab zyada smooth — Markets aur Trade sahi khulte hain
+• Paid plan free reset (Basic 3, Pro 5)
+• Leaderboard, Markets, Creds par ads wapas
+• Bug fixes aur performance improve

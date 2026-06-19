@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0e11" />
+    <title>Chart</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+        background: #0b0e11;
+        touch-action: manipulation;
+      }
+      #tv_chart_host {
+        width: 100%;
+        height: 100%;
+        min-height: 240px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="tv_chart_host"></div>
+    <script src="https://s3.tradingview.com/tv.js"></script>
+    <script>
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var sym = (params.get('symbol') || 'BTCUSDT').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        var userId = params.get('userId') || 'anon';
+        var h = Math.max(240, parseInt(params.get('h') || '400', 10) || 400);
+        document.getElementById('tv_chart_host').style.minHeight = h + 'px';
+
+        var widgetRef = null;
+        var persistUnbind = null;
+
+        function layoutKey(symbol) {
+          return 'tv_chart_drawings_v1:' + userId + ':' + symbol;
+        }
+
+        function readLayout(symbol) {
+          try {
+            var raw = localStorage.getItem(layoutKey(symbol));
+            return raw ? JSON.parse(raw) : null;
+          } catch (e) {
+            return null;
+          }
+        }
+
+        function writeLayout(symbol, data) {
+          try {
+            if (data) localStorage.setItem(layoutKey(symbol), JSON.stringify(data));
+          } catch (e) {}
+        }
+
+        function chartApi() {
+          if (!widgetRef) return null;
+          try {
+            if (typeof widgetRef.activeChart === 'function') return widgetRef.activeChart();
+            if (typeof widgetRef.chart === 'function') return widgetRef.chart();
+          } catch (e) {}
+          return null;
+        }
+
+        function flushSave(symbol) {
+          var chart = chartApi();
+          if (!chart || typeof chart.save !== 'function') return;
+          try {
+            chart.save(function (data) {
+              writeLayout(symbol, data);
+            });
+          } catch (e) {}
+        }
+
+        function loadSaved(symbol) {
+          var chart = chartApi();
+          var saved = readLayout(symbol);
+          if (!chart || !saved || typeof chart.load !== 'function') return;
+          try {
+            chart.load(saved);
+          } catch (e) {}
+        }
+
+        function bindPersistence(symbol) {
+          if (persistUnbind) {
+            try {
+              persistUnbind();
+            } catch (e) {}
+            persistUnbind = null;
+          }
+          var saveTimer = null;
+          var onReady = function () {
+            loadSaved(symbol);
+            var chart = chartApi();
+            if (chart && typeof chart.onAutoSaveNeeded === 'function') {
+              chart.onAutoSaveNeeded(function () {
+                if (saveTimer) clearTimeout(saveTimer);
+                saveTimer = setTimeout(function () {
+                  flushSave(symbol);
+                }, 200);
+              });
+            }
+            setTimeout(function () {
+              flushSave(symbol);
+            }, 1200);
+          };
+          if (typeof widgetRef.onChartReady === 'function') {
+            widgetRef.onChartReady(onReady);
+          } else {
+            onReady();
+          }
+          var intervalId = setInterval(function () {
+            flushSave(symbol);
+          }, 12000);
+          var onHide = function () {
+            if (document.visibilityState === 'hidden') flushSave(symbol);
+          };
+          document.addEventListener('visibilitychange', onHide);
+          persistUnbind = function () {
+            flushSave(symbol);
+            clearInterval(intervalId);
+            document.removeEventListener('visibilitychange', onHide);
+          };
+        }
+
+        function setSymbol(nextSym) {
+          var next = String(nextSym || sym)
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, '');
+          if (next === sym && widgetRef) return;
+          if (widgetRef) flushSave(sym);
+          sym = next;
+          createWidget(true);
+        }
+
+        function createWidget(force) {
+          if (widgetRef && !force) return;
+          if (!window.TradingView || !window.TradingView.widget) {
+            setTimeout(function () {
+              createWidget(force);
+            }, 40);
+            return;
+          }
+          if (force && widgetRef) {
+            try {
+              if (persistUnbind) persistUnbind();
+            } catch (e) {}
+            widgetRef = null;
+            document.getElementById('tv_chart_host').innerHTML = '';
+          }
+          widgetRef = new TradingView.widget({
+            autosize: true,
+            width: '100%',
+            height: h,
+            symbol: 'BINANCE:' + sym,
+            interval: params.get('interval') || '15',
+            timezone: 'Etc/UTC',
+            theme: 'dark',
+            style: '1',
+            locale: 'en',
+            toolbar_bg: '#1e2329',
+            enable_publishing: false,
+            hide_side_toolbar: false,
+            hide_top_toolbar: false,
+            hide_legend: false,
+            withdateranges: true,
+            allow_symbol_change: true,
+            load_last_chart: true,
+            save_image: true,
+            details: false,
+            hotlist: false,
+            calendar: false,
+            container_id: 'tv_chart_host'
+          });
+          bindPersistence(sym);
+        }
+
+        window.addEventListener('message', function (ev) {
+          var data = ev.data || {};
+          if (data.type === 'tv-set-symbol' && data.symbol) {
+            setSymbol(data.symbol);
+          }
+          if (data.type === 'tv-persist-now') {
+            flushSave(sym);
+          }
+        });
+
+        createWidget(false);
+      })();
+    </script>
+  </body>
+</html>

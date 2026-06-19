@@ -64,7 +64,7 @@ export default function ChartWidget({ symbol = "BTCUSDT" }) {
 
 const styles = StyleSheet.create({
   chartContainer: { 
-    height: 450, // Chart ki height thodi badha di hai tools ke liye
+    height: 450, // Taller chart area for tools
     width: width,
     backgroundColor: '#0b0e11' 
   },

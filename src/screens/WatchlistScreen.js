@@ -4,7 +4,7 @@ import { Star } from 'lucide-react-native';
 
 export default function WatchlistScreen() {
   const [search, setSearch] = useState('');
-  // Ye list Firestore se aayegi
+  // Watchlist is loaded from Firestore
   const [watchlist, setWatchlist] = useState([
     { id: '1', symbol: 'BTC', price: '64,250', change: '+2.5%' },
     { id: '2', symbol: 'ETH', price: '3,450', change: '-1.2%' },

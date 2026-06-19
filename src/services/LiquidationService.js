@@ -1,15 +1,11 @@
-// Ye function check karega ki user ka margin khatam toh nahi ho gaya
+import { liquidationPrice } from '../tradingEngine';
+
+export { liquidationPrice };
+
 export const checkLiquidation = (entryPrice, leverage, type, currentMarkPrice) => {
-  // Liquidation Price Calculation
-  // LONG: Entry * (1 - 1/Leverage)
-  // SHORT: Entry * (1 + 1/Leverage)
-  
-  let liqPrice;
-  if (type === 'LONG') {
-    liqPrice = entryPrice * (1 - (1 / leverage));
-    return currentMarkPrice <= liqPrice;
-  } else {
-    liqPrice = entryPrice * (1 + (1 / leverage));
-    return currentMarkPrice >= liqPrice;
-  }
+  const liq = liquidationPrice(type, entryPrice, leverage);
+  if (!Number.isFinite(liq) || !Number.isFinite(currentMarkPrice)) return false;
+  if (type === 'LONG') return currentMarkPrice <= liq;
+  if (type === 'SHORT') return currentMarkPrice >= liq;
+  return false;
 };

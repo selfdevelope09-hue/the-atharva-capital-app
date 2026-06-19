@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- DigitalOcean realtime server (Socket.io) — HTTP until TLS/domain is configured -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">64.227.188.248</domain>
+    </domain-config>
+</network-security-config>

@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "644668465681",
+    "project_id": "theatharvacapital-trading",
+    "storage_bucket": "theatharvacapital-trading.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:644668465681:android:b716b5dbfdbad3da5007b0",
+        "android_client_info": {
+          "package_name": "com.theatharvacapital.auronxtrade"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "644668465681-hodcdrbfqjtn9jvrf1qhmtk9sr4quqt7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.theatharvacapital.auronxtrade",
+            "certificate_hash": "a55c8d86ec2981b16d5ecf06993d3ecad3f6fcd7"
+          }
+        },
+        {
+          "client_id": "644668465681-0qmpgomoe74fg4iq3imll9i8jn2ga7ur.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAOEzgqvFYFRsTCT4eOWbQ9sDeNbgPwEnk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "644668465681-0qmpgomoe74fg4iq3imll9i8jn2ga7ur.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

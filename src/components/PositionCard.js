@@ -1,15 +1,20 @@
-import React, { useContext } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { PriceContext } from '../context/PriceContext';
+import { useHotPrices } from '../hooks/useHotPrices';
+import { grossPnlUsdt, quantityFromNotional } from '../tradingEngine';
+import { lookupLivePrice, normalizeBinanceSymbol, parseLiveMarkPrice } from '../utils/marketSymbol';
 
 export default function PositionCard({ pos, onPositionClose }) {
-  const allPrices = useContext(PriceContext);
-  const liveData = allPrices[pos.symbol] || { price: pos.entryPrice };
-  const currentPrice = parseFloat(liveData.price);
-
-  // PnL Logic
-  const priceDiff = pos.type === 'LONG' ? (currentPrice - pos.entryPrice) : (pos.entryPrice - currentPrice);
-  const pnl = (priceDiff / pos.entryPrice) * pos.totalSize * pos.leverage;
+  const allPrices = useHotPrices();
+  const sym = normalizeBinanceSymbol(pos.symbol);
+  const mark = parseLiveMarkPrice(lookupLivePrice(allPrices, sym));
+  const currentPrice = Number.isFinite(mark) ? mark : parseFloat(pos.entryPrice);
+  const entry = parseFloat(pos.entryPrice);
+  const qty =
+    Number.isFinite(parseFloat(pos.quantity)) && parseFloat(pos.quantity) > 0
+      ? parseFloat(pos.quantity)
+      : quantityFromNotional(parseFloat(pos.totalSize), entry);
+  const pnl = grossPnlUsdt(pos.type, entry, currentPrice, qty);
   const roe = (pnl / pos.margin) * 100;
 
   return (

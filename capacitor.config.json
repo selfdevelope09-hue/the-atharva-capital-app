@@ -1,0 +1,22 @@
+{
+  "appId": "com.theatharvacapital.auronxtrade",
+  "appName": "AuronX Trade",
+  "webDir": "build",
+  "plugins": {
+    "GoogleAuth": {
+      "scopes": ["profile", "email"],
+      "clientId": "644668465681-0qmpgomoe74fg4iq3imll9i8jn2ga7ur.apps.googleusercontent.com",
+      "androidClientId": "644668465681-0qmpgomoe74fg4iq3imll9i8jn2ga7ur.apps.googleusercontent.com",
+      "serverClientId": "644668465681-0qmpgomoe74fg4iq3imll9i8jn2ga7ur.apps.googleusercontent.com",
+      "forceCodeForRefreshToken": false
+    }
+  },
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

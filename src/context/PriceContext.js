@@ -1,40 +1,113 @@
-import React, { createContext, useState, useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
+import {
+  buildHotMiniTickerWsUrl,
+  ingest24hrTickers,
+  ingestTickerPayload
+} from './priceStore';
 
-export const PriceContext = createContext();
+export const PriceContext = React.createContext({});
 
-export const PriceProvider = ({ children }) => {
-  const [prices, setPrices] = useState({});
+const BINANCE_24HR_URL = 'https://api.binance.com/api/v3/ticker/24hr';
+const RECONNECT_MS = 3000;
+
+/**
+ * Binance prices: one REST bootstrap (all USDT), WS only for featured pairs (lighter).
+ * Use useHotPrices() on Trade/Dashboard/Ticker; Markets uses useAllPricesThrottled().
+ */
+export function PriceProvider({ children }) {
+  const wsRef = useRef(null);
+  const reconnectTimerRef = useRef(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    // Sabhi symbols ka data ek saath lane ke liye Binance Stream
-    // !miniTicker@arr sabhi pairs ki price real-time deta hai
-    const ws = new WebSocket('wss://stream.binance.com:9443/ws/!miniTicker@arr');
+    mountedRef.current = true;
+    let restAbort = null;
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      let newPrices = {};
-      data.forEach(coin => {
-        if (coin.s.endsWith('USDT')) {
-          newPrices[coin.s] = {
-            price: parseFloat(coin.c).toFixed(2),
-            close: parseFloat(coin.c),
-            open: parseFloat(coin.o)
-          };
-        }
-      });
-      // Sirf changes ko update karna taaki performance bani rahe
-      setPrices(prev => ({ ...prev, ...newPrices }));
+    const bootstrapRest = async () => {
+      try {
+        restAbort = new AbortController();
+        const res = await fetch(BINANCE_24HR_URL, { signal: restAbort.signal });
+        if (!res.ok) throw new Error(`Binance ${res.status}`);
+        const data = await res.json();
+        if (mountedRef.current) ingest24hrTickers(data);
+      } catch {
+        /* keep WS / prior snapshot */
+      }
     };
 
-    ws.onerror = (e) => console.log("WS Error: ", e);
-    ws.onclose = () => console.log("WS Closed, reconnecting...");
+    const connectWs = () => {
+      if (!mountedRef.current) return;
+      try {
+        if (wsRef.current) {
+          wsRef.current.onclose = null;
+          wsRef.current.close();
+        }
+      } catch {
+        /* ignore */
+      }
+      const ws = new WebSocket(buildHotMiniTickerWsUrl());
+      wsRef.current = ws;
 
-    return () => ws.close();
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          ingestTickerPayload(msg);
+        } catch {
+          /* ignore */
+        }
+      };
+
+      ws.onclose = () => {
+        if (!mountedRef.current) return;
+        if (reconnectTimerRef.current == null) {
+          reconnectTimerRef.current = window.setTimeout(() => {
+            reconnectTimerRef.current = null;
+            connectWs();
+          }, RECONNECT_MS);
+        }
+      };
+
+      ws.onerror = () => {
+        try {
+          ws.close();
+        } catch {
+          /* ignore */
+        }
+      };
+    };
+
+    const start = () => {
+      bootstrapRest();
+      connectWs();
+    };
+    let idleId = null;
+    let delayId = null;
+    if (typeof window.requestIdleCallback === 'function') {
+      idleId = window.requestIdleCallback(start, { timeout: 3000 });
+    } else {
+      delayId = window.setTimeout(start, 1200);
+    }
+
+    return () => {
+      if (idleId != null) window.cancelIdleCallback?.(idleId);
+      if (delayId != null) window.clearTimeout(delayId);
+      mountedRef.current = false;
+      if (restAbort) restAbort.abort();
+      if (reconnectTimerRef.current != null) {
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      try {
+        if (wsRef.current) {
+          wsRef.current.onclose = null;
+          wsRef.current.close();
+        }
+      } catch {
+        /* ignore */
+      }
+      wsRef.current = null;
+    };
   }, []);
 
-  return (
-    <PriceContext.Provider value={prices}>
-      {children}
-    </PriceContext.Provider>
-  );
-};
+  return <PriceContext.Provider value={{}}>{children}</PriceContext.Provider>;
+}

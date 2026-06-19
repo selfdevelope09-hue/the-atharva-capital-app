@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AuronX Trade</string>
+    <string name="title_activity_main">AuronX Trade</string>
+    <string name="package_name">com.theatharvacapital.auronxtrade</string>
+    <string name="custom_url_scheme">com.theatharvacapital.auronxtrade</string>
+    <!-- Web OAuth client ID (Firebase) — Codetrix GoogleAuth resolves clientId fallback from here -->
+    <string name="server_client_id">644668465681-0qmpgomoe74fg4iq3imll9i8jn2ga7ur.apps.googleusercontent.com</string>
+</resources>

@@ -1,0 +1,28 @@
+{
+  "name": "AuronX Trade — The Atharva Capital",
+  "short_name": "AuronX Trade",
+  "id": "/?app=auronx-trade-v3",
+  "description": "The Atharva Capital presents AuronX Trade — virtual crypto practice on live prices: virtual USDT, insights, leaderboard, and chat. By Atharva Darshanwar. Not financial advice.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "any",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "categories": [
+    "finance",
+    "education"
+  ],
+  "icons": [
+    {
+      "src": "/auron-logo.jpg",
+      "type": "image/jpeg",
+      "sizes": "512x512",
+      "purpose": "any"
+    }
+  ]
+}

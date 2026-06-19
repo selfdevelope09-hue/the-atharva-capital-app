@@ -13,7 +13,7 @@ export const AuthProvider = ({ children }) => {
     const userData = {
       uid: res.user.uid,
       email: email,
-      virtualBalance: 10000, // Logo ko sikhne ke liye $10,000 virtual cash
+      virtualBalance: 10000, // Default virtual balance for new learners
       portfolio: [],
       createdAt: new Date()
     };

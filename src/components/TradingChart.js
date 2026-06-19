@@ -2,7 +2,7 @@ import React from 'react';
 import { WebView } from 'react-native-webview'; // install: npm install react-native-webview
 
 export default function TradingChart({ symbol = "BTCUSDT" }) {
-  // TradingView ka official widget load kar rahe hain
+  // TradingView official widget
   const html = `
     <html>
       <body style="margin:0; background-color:#0b0e11;">

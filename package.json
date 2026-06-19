@@ -1,30 +1,61 @@
-{
-  "name": "atharva-capital-trading",
+﻿{
+  "name": "auronx",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/app": "^6.0.2",
+    "@capacitor/core": "^6.2.0",
+    "@codetrix-studio/capacitor-google-auth": "^3.4.0-rc.4",
+    "@supabase/supabase-js": "^2.105.4",
     "firebase": "^10.14.1",
-    "framer-motion": "^12.38.0",
-    "lightweight-charts": "^4.1.3",
-    "lucide-react": "^0.370.0",
+    "firebase-admin": "^13.8.0",
+    "html2canvas": "^1.4.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.30.3",
     "react-scripts": "5.0.1",
-    "recharts": "^2.15.4"
+    "recharts": "^2.15.4",
+    "socket.io-client": "^4.8.3"
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "node scripts/copy-charting-library.cjs && react-scripts build",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:open:android": "npx cap open android",
+    "android:release": "npm run build && npx cap sync android",
+    "android:bundle": "npm run build && npx cap sync android && cd android && .\\gradlew.bat bundleRelease",
+    "android:apk": "npm run build && npx cap sync android && cd android && .\\gradlew.bat assembleRelease",
+    "android:release:all": "npm run build && npx cap sync android && cd android && .\\gradlew.bat bundleRelease assembleRelease",
+    "android:sha1": "node scripts/print-android-signing-sha1.cjs",
+    "android:google-services": "npx firebase-tools apps:sdkconfig ANDROID 1:644668465681:android:b716b5dbfdbad3da5007b0 --out android/app/google-services.json",
+    "play:upload": "npm run android:bundle",
+    "deploy": "npm run build && npx vercel deploy --prod --yes",
+    "deploy:vercel": "npm run build && npx vercel deploy --prod --yes",
+    "deploy:firebase-hosting": "npm run build && npx firebase-tools deploy --only hosting",
     "deploy:netlify": "npm run build && npx netlify-cli deploy --prod --dir=build",
+    "deploy:rules": "npx firebase-tools deploy --only firestore:rules",
+    "deploy:storage": "npx firebase-tools deploy --only storage",
+    "deploy:indexes": "npx firebase-tools deploy --only firestore:indexes",
+    "migrate:firestore-users": "node scripts/migrate-firestore-users-to-supabase.js",
+    "migrate:firestore-postgres": "node scripts/migrate-firestore-to-postgres.js",
+    "migrate:firestore-postgres:dry": "node scripts/migrate-firestore-to-postgres.js --dry-run",
+    "db:migrate-trading": "node scripts/runTradingMigration.cjs",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^6.2.0",
+    "pg": "^8.13.1"
+  },
   "eslintConfig": {
     "extends": [
-      "react-app",
-      "react-app/jest"
+      "react-app"
     ]
+  },
+  "engines": {
+    "node": ">=18"
   },
   "browserslist": {
     "production": [

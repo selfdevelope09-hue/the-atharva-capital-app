@@ -1,0 +1,8 @@
+android/
+ios/
+node_modules/
+.git/
+*.log
+.env*.local
+build/
+.firebase/
