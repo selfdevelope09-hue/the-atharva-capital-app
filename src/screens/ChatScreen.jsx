@@ -34,6 +34,7 @@ import {
 } from '../utils/showcasePresence';
 import { formatChatClock, formatPresenceFromMs } from '../utils/chatPresenceFormat';
 import PaidMemberBadge, { PlanTierChip } from '../components/PaidMemberBadge';
+import PageLoader from '../components/ui/PageLoader';
 import { communityMessagePreview } from '../utils/communityChatNotify';
 import { displayTraderName } from '../utils/removedUserDisplay';
 import { fetchAdminEditors, deleteCommunityChatMessage } from '../api/adminDevApi';
@@ -346,6 +347,7 @@ export const ChatScreen = () => {
   const {
     user,
     userData,
+    loading: authLoading,
     dmThreads,
     actingAsUid,
     realUserUid,
@@ -1443,16 +1445,8 @@ export const ChatScreen = () => {
     }
   };
 
-  if (!user) {
-    return (
-      <div style={{ padding: 40, textAlign: 'center', maxWidth: 480, margin: '0 auto' }}>
-        <p style={{ color: T.text, marginBottom: 16 }}>Login to message other traders.</p>
-        <Link to="/login" state={{ from: '/chat' }} style={{ color: T.yellow, fontWeight: 700 }}>
-          Go to login
-        </Link>
-      </div>
-    );
-  }
+  if (authLoading) return <PageLoader label="Loading chat…" />;
+  if (!user) return null;
 
   return (
     <div

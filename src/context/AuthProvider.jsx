@@ -104,10 +104,19 @@ export function AuthProvider({ children }) {
     userDataRef.current = userData;
   }, [userData]);
 
-  /** Never block login/home if Firebase auth is slow (new visitors). */
+  /** Wait for Firebase initial auth state; failsafe so visitors are not stuck on a spinner. */
   useEffect(() => {
-    const t = window.setTimeout(() => setLoading(false), 4500);
-    return () => window.clearTimeout(t);
+    let cancelled = false;
+    auth.authStateReady().then(() => {
+      if (!cancelled) setLoading(false);
+    });
+    const failsafe = window.setTimeout(() => {
+      if (!cancelled) setLoading(false);
+    }, 10000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(failsafe);
+    };
   }, []);
 
   const commitUserData = useCallback((uid, raw) => {

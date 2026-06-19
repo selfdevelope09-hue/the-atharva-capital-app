@@ -48,6 +48,7 @@ function resolveBffUrl(path) {
 }
 
 async function getToken() {
+  await auth.authStateReady();
   const u = auth.currentUser;
   if (!u) throw new Error('Not signed in');
   return u.getIdToken();

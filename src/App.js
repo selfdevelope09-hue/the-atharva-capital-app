@@ -123,7 +123,14 @@ function AppShell() {
             <Route path="/login" element={<LoginScreen />} />
             <Route path="/signup" element={<SignupScreen />} />
             <Route path="/profile/:userId" element={<ProfileScreen />} />
-            <Route path="/chat" element={<ChatScreen />} />
+            <Route
+              path="/chat"
+              element={
+                <ProtectedRoute>
+                  <ChatScreen />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/dashboard"
               element={

@@ -8,7 +8,12 @@ import { useTipEditorAccess } from '../hooks/useTipEditorAccess';
 const MQ = '(max-width: 920px)';
 
 export function bottomNavHiddenPathLite(pathname) {
-  return pathname === '/login' || pathname === '/signup';
+  return (
+    pathname === '/login' ||
+    pathname === '/signup' ||
+    pathname === '/chat' ||
+    pathname.startsWith('/chat/')
+  );
 }
 
 const BottomNavLite = memo(function BottomNavLite() {
