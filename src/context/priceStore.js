@@ -1,12 +1,24 @@
 import { TRADING_PAIRS_USDT } from '../config/tradingPairs';
 
 const HOT = new Set(TRADING_PAIRS_USDT);
-const FLUSH_MS = 200;
+const FLUSH_MS = 80;
+const HOT_CACHE_KEY = 'auron-hot-prices-v1';
 
 /** @type {Record<string, object>} */
 let allPrices = {};
 /** @type {Record<string, object>} */
 let hotPrices = {};
+try {
+  if (typeof window !== 'undefined') {
+    const raw = window.sessionStorage?.getItem(HOT_CACHE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') hotPrices = parsed;
+    }
+  }
+} catch {
+  /* ignore */
+}
 let hotVersion = 0;
 const hotListeners = new Set();
 let allVersion = 0;
@@ -17,6 +29,13 @@ let flushTimer = null;
 
 function notifyHot() {
   hotVersion += 1;
+  try {
+    if (typeof window !== 'undefined' && Object.keys(hotPrices).length) {
+      window.sessionStorage?.setItem(HOT_CACHE_KEY, JSON.stringify(hotPrices));
+    }
+  } catch {
+    /* ignore */
+  }
   hotListeners.forEach((fn) => {
     try {
       fn();

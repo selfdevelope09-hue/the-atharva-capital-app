@@ -76,21 +76,10 @@ export function PriceProvider({ children }) {
       };
     };
 
-    const start = () => {
-      bootstrapRest();
-      connectWs();
-    };
-    let idleId = null;
-    let delayId = null;
-    if (typeof window.requestIdleCallback === 'function') {
-      idleId = window.requestIdleCallback(start, { timeout: 3000 });
-    } else {
-      delayId = window.setTimeout(start, 1200);
-    }
+    bootstrapRest();
+    connectWs();
 
     return () => {
-      if (idleId != null) window.cancelIdleCallback?.(idleId);
-      if (delayId != null) window.clearTimeout(delayId);
       mountedRef.current = false;
       if (restAbort) restAbort.abort();
       if (reconnectTimerRef.current != null) {

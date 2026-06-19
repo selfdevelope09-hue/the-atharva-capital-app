@@ -1,55 +1,80 @@
-import React, { useContext, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { PriceContext } from '../context/PriceContext';
+import { useHotPrices } from '../hooks/useHotPrices';
+import { TRADING_PAIRS_USDT } from '../config/tradingPairs';
 import { T } from '../app/theme';
 
+function resolvePct(d) {
+  const direct = Number(d?.change);
+  if (Number.isFinite(direct)) return direct;
+  const close = Number(d?.close ?? d?.price);
+  const open = Number(d?.open);
+  if (Number.isFinite(close) && Number.isFinite(open) && open > 0) {
+    return ((close - open) / open) * 100;
+  }
+  return 0;
+}
+
 export function TickerTape() {
-  const prices = useContext(PriceContext);
-  const entries = useMemo(
+  const prices = useHotPrices();
+  const rows = useMemo(
     () =>
-      Object.entries(prices)
-        .filter(([sym]) => sym.endsWith('USDT'))
-        .sort((a, b) => parseFloat(b[1].price) - parseFloat(a[1].price))
-        .slice(0, 42),
+      TRADING_PAIRS_USDT.slice(0, 18).map((sym) => {
+        const d = prices[sym];
+        const price = Number(d?.price);
+        const change = d ? resolvePct(d) : 0;
+        return {
+          sym,
+          price: Number.isFinite(price) ? price : null,
+          change: Number.isFinite(change) ? change : 0,
+          ready: !!d
+        };
+      }),
     [prices]
   );
 
-  const renderSeg = (sym, d, i) => {
-    const chg = d ? parseFloat(d.change) : 0;
-    const up = chg >= 0;
+  const hasAny = rows.some((r) => r.ready);
+
+  const renderSeg = (r, i) => {
+    const up = r.change >= 0;
     return (
-      <span key={`${sym}-${i}`} className="ticker-seg">
-        <Link to={`/trade?symbol=${sym}`} style={{ color: T.white, textDecoration: 'none', fontWeight: 700 }}>
-          {sym.replace('USDT', '')}
+      <span key={`${r.sym}-${i}`} className="ticker-seg">
+        <Link to={`/trade?symbol=${r.sym}`} style={{ color: T.white, textDecoration: 'none', fontWeight: 700 }}>
+          {r.sym.replace('USDT', '')}
         </Link>
         <span style={{ color: T.text }}>/USDT</span>
         <span style={{ color: T.white, fontWeight: 600 }}>
-          ${d ? parseFloat(d.price).toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}
+          {r.ready ? `$${r.price.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '…'}
         </span>
         <span style={{ color: up ? T.green : T.red, fontWeight: 600, minWidth: '3.2em' }}>
-          {up ? '▲' : '▼'} {up ? '+' : ''}
-          {d ? chg.toFixed(2) : '0.00'}%
+          {r.ready ? (
+            <>
+              {up ? '▲' : '▼'} {up ? '+' : ''}
+              {r.change.toFixed(2)}%
+            </>
+          ) : (
+            <span style={{ color: T.text, fontWeight: 500 }}>live</span>
+          )}
         </span>
         <span className="ticker-dot">|</span>
       </span>
     );
   };
 
-  const segments =
-    entries.length > 0 ? (
-      <>{entries.map(([sym, d], i) => renderSeg(sym, d, i))}</>
-    ) : (
-      <span className="ticker-seg" style={{ color: T.text, paddingLeft: 16 }}>
-        Live prices loading…
-      </span>
-    );
+  const segments = hasAny ? (
+    <>{rows.map((r, i) => renderSeg(r, i))}</>
+  ) : (
+    <span className="ticker-seg" style={{ color: T.text, paddingLeft: 16 }}>
+      Live prices loading…
+    </span>
+  );
 
   return (
     <div className="ticker-wrap" aria-label="Live crypto prices ticker">
       <div className="ticker-track">
         <div style={{ display: 'flex' }}>{segments}</div>
         <div style={{ display: 'flex' }} aria-hidden="true">
-          {entries.length > 0 ? entries.map(([sym, d], i) => renderSeg(sym, d, i + 1000)) : null}
+          {hasAny ? rows.map((r, i) => renderSeg(r, i + 1000)) : null}
         </div>
       </div>
     </div>

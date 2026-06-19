@@ -67,6 +67,7 @@ class AppErrorBoundary extends React.Component {
 function AppShell() {
   const { pathname } = useLocation();
   const mainBottomPad = !bottomNavHiddenPath(pathname);
+  const isChatRoute = pathname === '/chat' || pathname.startsWith('/chat/');
 
   useEffect(() => {
     runDeferredStartup(pathname);
@@ -76,7 +77,15 @@ function AppShell() {
     <div style={{ backgroundColor: T.bg, minHeight: '100vh', width: '100%', display: 'flex', flexDirection: 'column', color: T.white, fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
       <DocumentTitleSync />
       <Navbar />
-      <main className={mainBottomPad ? 'app-main-with-bottom-nav' : undefined} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', width: '100%', overflowY: 'visible' }}>
+      <main
+        className={[
+          mainBottomPad ? 'app-main-with-bottom-nav' : '',
+          isChatRoute ? 'app-main-chat' : ''
+        ]
+          .filter(Boolean)
+          .join(' ') || undefined}
+        style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', width: '100%', overflowY: 'visible' }}
+      >
         <Suspense
           fallback={
             <div
