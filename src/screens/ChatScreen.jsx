@@ -37,12 +37,17 @@ import PaidMemberBadge, { PlanTierChip } from '../components/PaidMemberBadge';
 import PageLoader from '../components/ui/PageLoader';
 import { communityMessagePreview } from '../utils/communityChatNotify';
 import { displayTraderName } from '../utils/removedUserDisplay';
-import { fetchAdminEditors, deleteCommunityChatMessage } from '../api/adminDevApi';
+import { fetchAdminEditors, deleteCommunityChatMessage, disableCommunityMessage } from '../api/adminDevApi';
 import { sumDmUnread, effectiveUnreadForUid } from '../utils/threadUnread';
+import { COMMUNITY_ROOMS, communityRoomFromParam, ROAST_PNL_PER_MESSAGE } from '../config/communityRooms';
+import RoastLeaderboardPanel from '../components/chat/RoastLeaderboardPanel';
 
 const COMMUNITY_ROOM = 'community';
-const COMMUNITY_CACHE_KEY = 'community__traders';
-const COMMUNITY_NAME = 'Aurox trade Community';
+const ROAST_ROOM = 'roast';
+const COMMUNITY_CACHE_KEY = COMMUNITY_ROOMS.community.cacheKey;
+const ROAST_CACHE_KEY = COMMUNITY_ROOMS.roast.cacheKey;
+const COMMUNITY_NAME = COMMUNITY_ROOMS.community.name;
+const ROAST_NAME = COMMUNITY_ROOMS.roast.name;
 const AURON_LOGO = '/auron-logo.jpg';
 
 const CommunityLogo = ({ size = 44 }) => (
@@ -354,6 +359,7 @@ export const ChatScreen = () => {
     refreshDmThreads,
     patchDmThreadUnread,
     mergeDmThread,
+    refreshUser,
     communityUnread,
     communityLastMessage
   } = useContext(AuthContext);
@@ -362,7 +368,9 @@ export const ChatScreen = () => {
   const searchWith = useMemo(() => new URLSearchParams(location.search).get('with') || '', [location.search]);
   const searchRoom = useMemo(() => new URLSearchParams(location.search).get('room') || '', [location.search]);
   const searchMsg = useMemo(() => new URLSearchParams(location.search).get('msg') || '', [location.search]);
-  const isCommunityView = searchRoom === COMMUNITY_ROOM;
+  const isCommunityView = searchRoom === COMMUNITY_ROOM || searchRoom === ROAST_ROOM;
+  const isRoastView = searchRoom === ROAST_ROOM;
+  const activeCommunityRoom = useMemo(() => (isCommunityView ? communityRoomFromParam(searchRoom) : null), [isCommunityView, searchRoom]);
 
   const [activeOtherId, setActiveOtherId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -399,6 +407,10 @@ export const ChatScreen = () => {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [deletingCommunityMsgId, setDeletingCommunityMsgId] = useState('');
+  const [roastUnread, setRoastUnread] = useState(0);
+  const [mainCommunityUnread, setMainCommunityUnread] = useState(0);
+  const [roomChatDisabled, setRoomChatDisabled] = useState('');
+
   const [narrow, setNarrow] = useState(
     () => typeof window !== 'undefined' && window.innerWidth <= 720
   );
@@ -410,6 +422,21 @@ export const ChatScreen = () => {
     fn();
     return () => mq.removeEventListener('change', fn);
   }, []);
+  useEffect(() => {
+    if (!user?.uid || !isBffChatMode()) return undefined;
+    const poll = () => {
+      bff(`/api/chat/community-unread?room=${encodeURIComponent(COMMUNITY_ROOM)}`)
+        .then((j) => setMainCommunityUnread(Number(j.unreadCount) || 0))
+        .catch(() => {});
+      bff(`/api/chat/community-unread?room=${encodeURIComponent(ROAST_ROOM)}`)
+        .then((j) => setRoastUnread(Number(j.unreadCount) || 0))
+        .catch(() => {});
+    };
+    poll();
+    const id = window.setInterval(poll, 8000);
+    return () => clearInterval(id);
+  }, [user?.uid]);
+
   useEffect(() => {
     const onBff = () => setBffModeRev((x) => x + 1);
     window.addEventListener('auron-bff-mode', onBff);
@@ -547,7 +574,8 @@ export const ChatScreen = () => {
     return dmChannelId(user.uid, activeOtherId);
   }, [user, activeOtherId]);
 
-  const chatViewKey = isCommunityView ? COMMUNITY_CACHE_KEY : channelId;
+  const chatViewKey = isCommunityView ? activeCommunityRoom?.cacheKey : channelId;
+  const communityRoomId = activeCommunityRoom?.id || COMMUNITY_ROOM;
   const inConversation = !!activeOtherId || isCommunityView;
   const canCompose = inConversation && !uploadBusy && !sending;
 
@@ -581,7 +609,7 @@ export const ChatScreen = () => {
         return undefined;
       }
       const load = () =>
-        bff(`/api/chat/community-messages?limit=${CHAT_MESSAGE_PAGE}`)
+        bff(`/api/chat/community-messages?room=${encodeURIComponent(communityRoomId)}&limit=${CHAT_MESSAGE_PAGE}`)
           .then((j) => {
             const next = Array.isArray(j.messages) ? j.messages : [];
             if (j.readsByMessage && typeof j.readsByMessage === 'object') {
@@ -665,7 +693,7 @@ export const ChatScreen = () => {
       }
     );
     return unsub;
-  }, [chatViewKey, channelId, isCommunityView, user?.uid, bffModeRev, actingAsUid, realUserUid]);
+  }, [chatViewKey, channelId, isCommunityView, communityRoomId, user?.uid, bffModeRev, actingAsUid, realUserUid]);
 
   useEffect(() => {
     if (!searchMsg.trim()) return;
@@ -678,12 +706,12 @@ export const ChatScreen = () => {
     const mark = () =>
       bff('/api/chat/community-mark-read', {
         method: 'POST',
-        body: JSON.stringify(withChatAsBody({ fromName }, actingAsUid, realUserUid))
+        body: JSON.stringify(withChatAsBody({ fromName, room: communityRoomId }, actingAsUid, realUserUid))
       }).catch(() => {});
     mark();
     const id = window.setInterval(mark, 4000);
     return () => clearInterval(id);
-  }, [isCommunityView, user?.uid, userData?.name, user?.email, actingAsUid, realUserUid]);
+  }, [isCommunityView, communityRoomId, user?.uid, userData?.name, user?.email, actingAsUid, realUserUid]);
 
   useEffect(() => {
     if (!isCommunityView || !user?.uid || !messages.length || !isBffChatMode()) return;
@@ -1012,13 +1040,15 @@ export const ChatScreen = () => {
     navigate(`/chat?with=${encodeURIComponent(otherUid)}`, { replace: narrow });
   };
 
-  const pickCommunity = () => {
+  const pickCommunity = (roomId = COMMUNITY_ROOM) => {
+    const room = communityRoomFromParam(roomId);
     setActiveOtherId(null);
     setBootErr('');
-    if (messagesCacheRef.current[COMMUNITY_CACHE_KEY]?.length) {
-      setMessages(messagesCacheRef.current[COMMUNITY_CACHE_KEY]);
+    setRoomChatDisabled('');
+    if (messagesCacheRef.current[room.cacheKey]?.length) {
+      setMessages(messagesCacheRef.current[room.cacheKey]);
     }
-    navigate('/chat?room=community', { replace: narrow });
+    navigate(`/chat?room=${encodeURIComponent(room.id)}`, { replace: narrow });
   };
 
   const backToChatList = () => {
@@ -1123,7 +1153,7 @@ export const ChatScreen = () => {
     try {
       let url;
       if (isCommunityView) {
-        url = `/api/chat/community-messages?limit=${CHAT_MESSAGE_PAGE}&before=${encodeURIComponent(before)}`;
+        url = `/api/chat/community-messages?room=${encodeURIComponent(communityRoomId)}&limit=${CHAT_MESSAGE_PAGE}&before=${encodeURIComponent(before)}`;
       } else if (channelId) {
         url = withChatAsPath(
           `/api/chat/messages?threadId=${encodeURIComponent(channelId)}&limit=${CHAT_MESSAGE_PAGE}&before=${encodeURIComponent(before)}`,
@@ -1168,6 +1198,27 @@ export const ChatScreen = () => {
     realUserUid
   ]);
 
+  const hideCommunityMessage = useCallback(
+    async (messageId) => {
+      if (!messageId || !isPlatformAdmin || !isCommunityView) return;
+      if (!window.confirm('Is message ko group se hide/disable karna hai?')) return;
+      setDeletingCommunityMsgId(messageId);
+      try {
+        await disableCommunityMessage(messageId);
+        setMessages((prev) => {
+          const next = prev.filter((m) => m.id !== messageId);
+          messagesCacheRef.current[chatViewKey] = next;
+          return next;
+        });
+      } catch (e) {
+        setFirestoreErr(e?.message || 'Could not disable message.');
+      } finally {
+        setDeletingCommunityMsgId('');
+      }
+    },
+    [isPlatformAdmin, isCommunityView, chatViewKey]
+  );
+
   const deleteCommunityMessage = useCallback(
     async (messageId) => {
       if (!messageId || !isPlatformAdmin || !isCommunityView) return;
@@ -1178,7 +1229,7 @@ export const ChatScreen = () => {
         await deleteCommunityChatMessage(messageId);
         setMessages((prev) => {
           const next = prev.filter((m) => m.id !== messageId);
-          messagesCacheRef.current[COMMUNITY_CACHE_KEY] = next;
+          messagesCacheRef.current[chatViewKey] = next;
           return next;
         });
         setCommunityReadsByMessage((prev) => {
@@ -1195,7 +1246,7 @@ export const ChatScreen = () => {
         setDeletingCommunityMsgId('');
       }
     },
-    [isPlatformAdmin, isCommunityView, openSeenInfoId]
+    [isPlatformAdmin, isCommunityView, openSeenInfoId, chatViewKey]
   );
 
   useLayoutEffect(() => {
@@ -1324,7 +1375,7 @@ export const ChatScreen = () => {
             method: 'POST',
             body: JSON.stringify(
               withChatAsBody(
-                { text, imageUrl, fileUrl, fileName, mediaKind, fromName },
+                { text, imageUrl, fileUrl, fileName, mediaKind, fromName, room: communityRoomId },
                 actingAsUid,
                 realUserUid
               )
@@ -1334,7 +1385,7 @@ export const ChatScreen = () => {
             setMessages((prev) => {
               if (prev.some((m) => m.id === result.message.id)) return prev;
               const next = [...prev, result.message];
-              messagesCacheRef.current[COMMUNITY_CACHE_KEY] = next;
+              messagesCacheRef.current[chatViewKey] = next;
               return next;
             });
             const senderName = userData?.name || user?.email?.split('@')[0] || 'Trader';
@@ -1342,9 +1393,14 @@ export const ChatScreen = () => {
               ...prev,
               [result.message.id]: [{ uid: user.uid, fromName: senderName }]
             }));
+            if (result?.roastReward?.pnlAdded) {
+              refreshUser?.().catch(() => {});
+              window.dispatchEvent(new CustomEvent('auron-firestore-user-sync'));
+            }
           } else {
             reloadMessagesRef.current?.();
           }
+          setRoomChatDisabled('');
           setReplyTo(null);
           setOutPending(null);
           setDraft('');
@@ -1435,7 +1491,10 @@ export const ChatScreen = () => {
     } catch (e) {
       console.error(e);
       setOutPending(null);
-      if (e?.code === 'permission-denied' || (e?.message || '').toLowerCase().includes('permission')) {
+      const msg = e?.message || '';
+      if (msg.toLowerCase().includes('disabled')) {
+        setRoomChatDisabled(msg);
+      } else if (e?.code === 'permission-denied' || msg.toLowerCase().includes('permission')) {
         setFirestoreErr('Message sending was blocked by Firestore rules. Please retry after rules are deployed.');
       } else {
         setFirestoreErr(e?.message || 'Could not send message.');
@@ -1645,14 +1704,14 @@ export const ChatScreen = () => {
           <button
             type="button"
             className="chat-community-row"
-            onClick={pickCommunity}
+            onClick={() => pickCommunity(COMMUNITY_ROOM)}
             style={{
               width: '100%',
               textAlign: 'left',
               padding: '12px 10px',
               border: 'none',
               borderBottom: '1px solid rgba(255,255,255,0.06)',
-              background: isCommunityView ? 'rgba(0,168,132,0.18)' : 'rgba(0,168,132,0.08)',
+              background: searchRoom === COMMUNITY_ROOM ? 'rgba(0,168,132,0.18)' : 'rgba(0,168,132,0.08)',
               color: '#e9edef',
               cursor: 'pointer',
               display: 'flex',
@@ -1666,7 +1725,7 @@ export const ChatScreen = () => {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                 <span
                   style={{
-                    fontWeight: communityUnread > 0 ? 800 : 700,
+                    fontWeight: mainCommunityUnread > 0 ? 800 : 700,
                     fontSize: 16,
                     color: '#e9edef',
                     overflow: 'hidden',
@@ -1676,9 +1735,9 @@ export const ChatScreen = () => {
                 >
                   {COMMUNITY_NAME}
                 </span>
-                {communityUnread > 0 ? (
+                {mainCommunityUnread > 0 ? (
                   <span
-                    title={`${communityUnread} unread`}
+                    title={`${mainCommunityUnread} unread`}
                     style={{
                       minWidth: 20,
                       height: 20,
@@ -1694,22 +1753,71 @@ export const ChatScreen = () => {
                       flexShrink: 0
                     }}
                   >
-                    {communityUnread > 99 ? '99+' : communityUnread}
+                    {mainCommunityUnread > 99 ? '99+' : mainCommunityUnread}
                   </span>
                 ) : null}
               </div>
               <div
                 style={{
                   fontSize: 13,
-                  color: communityUnread > 0 ? '#d1e8e2' : '#8696a0',
+                  color: mainCommunityUnread > 0 ? '#d1e8e2' : '#8696a0',
                   marginTop: 4,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
-                  fontWeight: communityUnread > 0 ? 600 : 400
+                  fontWeight: mainCommunityUnread > 0 ? 600 : 400
                 }}
               >
                 {communityPreviewLine}
+              </div>
+            </div>
+          </button>
+          <button
+            type="button"
+            className="chat-community-row chat-community-row--roast"
+            onClick={() => pickCommunity(ROAST_ROOM)}
+            style={{
+              width: '100%',
+              textAlign: 'left',
+              padding: '12px 10px',
+              border: 'none',
+              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              background: searchRoom === ROAST_ROOM ? 'rgba(246,70,93,0.22)' : 'rgba(246,70,93,0.1)',
+              color: '#e9edef',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12
+            }}
+          >
+            <span style={{ fontSize: 34, lineHeight: 1, flexShrink: 0 }}>🔥</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <span style={{ fontWeight: roastUnread > 0 ? 800 : 700, fontSize: 16, color: '#ffe2e2' }}>
+                  {ROAST_NAME}
+                </span>
+                {roastUnread > 0 ? (
+                  <span
+                    style={{
+                      minWidth: 20,
+                      height: 20,
+                      padding: '0 6px',
+                      borderRadius: 999,
+                      background: '#f6465d',
+                      color: '#fff',
+                      fontSize: 11,
+                      fontWeight: 900,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    {roastUnread > 99 ? '99+' : roastUnread}
+                  </span>
+                ) : null}
+              </div>
+              <div style={{ fontSize: 12, color: '#ffb4b4', marginTop: 4 }}>
+                +${ROAST_PNL_PER_MESSAGE.toLocaleString()} / msg · Roast points · special leaderboard
               </div>
             </div>
           </button>
@@ -1842,6 +1950,7 @@ export const ChatScreen = () => {
         }}
       >
         <div
+          className="chat-header-bar"
           style={{
             padding: narrow ? '8px 10px 10px' : '12px 14px 12px',
             borderBottom: '1px solid rgba(255,255,255,0.06)',
@@ -1874,7 +1983,17 @@ export const ChatScreen = () => {
                 ‹
               </button>
             ) : null}
-            {isCommunityView ? (
+            {isRoastView ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: 36 }}>🔥</span>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ color: T.white, fontWeight: 800, fontSize: narrow ? 17 : 18 }}>{ROAST_NAME}</div>
+                  <div style={{ fontSize: 12, color: '#ffb4b4', marginTop: 2 }}>
+                    +${ROAST_PNL_PER_MESSAGE.toLocaleString()} leaderboard P/L per message
+                  </div>
+                </div>
+              </div>
+            ) : isCommunityView ? (
               <div
                 style={{
                   display: 'flex',
@@ -1972,6 +2091,9 @@ export const ChatScreen = () => {
               </div>
             )}
           </div>
+          {roomChatDisabled ? (
+            <div style={{ color: T.red, fontSize: 12, marginTop: 6 }}>{roomChatDisabled}</div>
+          ) : null}
           {bootErr && <div style={{ color: T.red, fontSize: 12, marginTop: 6 }}>{bootErr}</div>}
           {firestoreErr && !bootErr && (
             <div style={{ color: T.red, fontSize: 12, marginTop: 6 }}>{firestoreErr}</div>
@@ -1994,6 +2116,7 @@ export const ChatScreen = () => {
             background: '#0b141a'
           }}
         >
+          {isRoastView && inConversation ? <RoastLeaderboardPanel compact /> : null}
           {!inConversation && (
             <div style={{ color: T.text, fontSize: 13, padding: 12, lineHeight: 1.55 }}>
               Select a conversation from the list, open{' '}
@@ -2253,6 +2376,19 @@ export const ChatScreen = () => {
                     <button
                       type="button"
                       className="chat-community-delete-btn"
+                      title="Hide message (admin)"
+                      aria-label="Hide message"
+                      disabled={deletingCommunityMsgId === m.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        hideCommunityMessage(m.id);
+                      }}
+                    >
+                      {deletingCommunityMsgId === m.id ? '…' : '⏸'}
+                    </button>
+                    <button
+                      type="button"
+                      className="chat-community-delete-btn"
                       title="Delete message (admin)"
                       aria-label="Delete message"
                       disabled={deletingCommunityMsgId === m.id}
@@ -2390,10 +2526,10 @@ export const ChatScreen = () => {
         </div>
 
         <div
+          className="chat-compose-bar"
           style={{
-            marginTop: 'auto',
             padding: '8px 10px 10px',
-            paddingBottom: narrow ? 'max(8px, env(safe-area-inset-bottom))' : 10,
+            paddingBottom: narrow ? 'max(10px, env(safe-area-inset-bottom))' : 10,
             flexShrink: 0,
             display: 'flex',
             flexDirection: 'column',
@@ -2565,11 +2701,13 @@ export const ChatScreen = () => {
           </button>
           <Input
             placeholder={
-              isCommunityView
-                ? `Message ${COMMUNITY_NAME}`
-                : activeOtherId
-                  ? 'Type a message'
-                  : 'Pick a chat first'
+              isRoastView
+                ? `Roast here — +$${ROAST_PNL_PER_MESSAGE.toLocaleString()} per message`
+                : isCommunityView
+                  ? `Message ${COMMUNITY_NAME}`
+                  : activeOtherId
+                    ? 'Type a message'
+                    : 'Pick a chat first'
             }
             value={draft}
             disabled={!inConversation}

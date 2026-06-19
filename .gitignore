@@ -30,3 +30,6 @@ android/captures/
 android/keystore.properties
 android/*.keystore
 android/*.jks
+
+# Local Netlify folder
+.netlify

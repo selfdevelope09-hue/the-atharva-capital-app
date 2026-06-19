@@ -148,6 +148,30 @@ button, a {
   flex: 1;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.chat-header-bar {
+  flex-shrink: 0;
+  z-index: 12;
+  position: relative;
+}
+
+.chat-compose-bar {
+  flex-shrink: 0;
+  z-index: 12;
+  position: relative;
+}
+
+.chat-messages-pane {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background-color: #0b141a;
+  background-image: radial-gradient(circle at 20% 20%, rgba(0, 168, 132, 0.04), transparent 35%),
+    radial-gradient(circle at 80% 0%, rgba(240, 185, 11, 0.03), transparent 30%);
 }
 
 .chat-thread-scroll {
@@ -168,10 +192,8 @@ button, a {
   filter: brightness(1.08);
 }
 
-.chat-messages-pane {
-  background-color: #0b141a;
-  background-image: radial-gradient(circle at 20% 20%, rgba(0, 168, 132, 0.04), transparent 35%),
-    radial-gradient(circle at 80% 0%, rgba(240, 185, 11, 0.03), transparent 30%);
+.chat-community-row--roast:hover {
+  filter: brightness(1.12);
 }
 
 .chat-msg-row-out {

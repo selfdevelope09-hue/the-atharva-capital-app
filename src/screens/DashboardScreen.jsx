@@ -842,11 +842,13 @@ function DashboardScreen() {
                 <span>
                   <span
                     style={{
-                      color: pos.status === 'LIQUIDATED' ? T.red : pos.type === 'LONG' ? T.green : T.red,
+                      color: pos.status === 'LIQUIDATED' ? T.red : pos.type === 'LONG' ? T.green : pos.type === 'ROAST' ? '#f6465d' : T.red,
                       fontWeight: 600
                     }}
                   >
-                    {pos.symbol} {pos.type} {pos.status === 'LIQUIDATED' ? '• LIQUIDATED' : ''}
+                    {pos.source === 'roast' || pos.type === 'ROAST'
+                      ? `ROAST · by Roast`
+                      : `${pos.symbol} ${pos.type}${pos.status === 'LIQUIDATED' ? ' • LIQUIDATED' : ''}`}
                   </span>{' '}
                   <span style={{ color: T.text }}>
                     {fmtClosedWhen(pos.closedAt)}

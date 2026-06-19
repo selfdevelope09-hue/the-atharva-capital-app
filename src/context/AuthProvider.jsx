@@ -593,21 +593,29 @@ export function AuthProvider({ children }) {
     }
     requestBrowserNotificationPermission();
 
-    const poll = () =>
-      bff('/api/chat/community-unread')
-        .then((j) => {
-          const n = Number(j.unreadCount) || 0;
-          const last = j.lastMessage && typeof j.lastMessage === 'object' ? j.lastMessage : null;
-          setCommunityUnread(n);
-          setCommunityLastMessage(last);
+    const poll = async () => {
+      try {
+        const rooms = ['community', 'roast'];
+        let total = 0;
+        let last = null;
+        for (const room of rooms) {
+          const j = await bff(`/api/chat/community-unread?room=${encodeURIComponent(room)}`);
+          total += Number(j.unreadCount) || 0;
+          if (room === 'community' && j.lastMessage) last = j.lastMessage;
+          if (room === 'roast' && j.lastMessage && !last) last = j.lastMessage;
+        }
+        setCommunityUnread(total);
+        setCommunityLastMessage(last);
 
-          const prev = prevCommunityUnreadRef.current;
-          if (n > prev && n > 0 && (!isOnCommunityChatRoute() || document.hidden)) {
-            showCommunityNotificationFromUnreadDelta({ deltaCount: n - prev, lastMessage: last });
-          }
-          prevCommunityUnreadRef.current = n;
-        })
-        .catch(() => {});
+        const prev = prevCommunityUnreadRef.current;
+        if (total > prev && total > 0 && (!isOnCommunityChatRoute() || document.hidden)) {
+          showCommunityNotificationFromUnreadDelta({ deltaCount: total - prev, lastMessage: last });
+        }
+        prevCommunityUnreadRef.current = total;
+      } catch {
+        /* ignore */
+      }
+    };
 
     let cancelled = false;
     let timer;

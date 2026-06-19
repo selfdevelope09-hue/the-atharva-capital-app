@@ -6,7 +6,7 @@ import { T } from '../app/theme';
 import { bff } from '../api/serverBff';
 import { runMonthlyReset, backfillLeaderboardPnl } from '../api/adminDevApi';
 import { fetchAdminEditors, fetchBlockedUids, blockUid, unblockUid } from '../api/adminDevApi';
-import { adjustFollowers, removePlatformUser, restorePlatformUser } from '../api/adminDevApi';
+import { adjustFollowers, removePlatformUser, restorePlatformUser, toggleCommunityRoom } from '../api/adminDevApi';
 import { clearLeaderboardClientCacheAndNotify } from '../utils/leaderboardClientCache';
 
 export default function DeveloperPlatformPanel() {
@@ -590,6 +590,59 @@ export default function DeveloperPlatformPanel() {
               ))
             )}
           </div>
+        </div>
+      </Card>
+
+      <Card style={{ marginTop: 18, padding: 16 }}>
+        <h2 style={{ color: T.white, marginTop: 0, fontSize: 16 }}>Group chat control</h2>
+        <p style={{ color: T.text, fontSize: 13, lineHeight: 1.45 }}>
+          Community ya Roast group chat band/khol sakte ho. Group ke andar kisi message par admin ⏸ se hide bhi kar sakte ho (Chat screen).
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+          {[
+            ['community', 'AuronX Community'],
+            ['roast', 'Roast Community']
+          ].map(([room, label]) => (
+            <div key={room} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Btn
+                type="button"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  setMsg('');
+                  try {
+                    await toggleCommunityRoom(room, true);
+                    setMsg(`${label} chat enabled.`);
+                  } catch (e) {
+                    setMsg(e?.message || 'Enable failed.');
+                  }
+                  setBusy(false);
+                }}
+                style={{ background: T.green, color: '#fff', fontSize: 12 }}
+              >
+                Enable {label}
+              </Btn>
+              <Btn
+                type="button"
+                disabled={busy}
+                onClick={async () => {
+                  if (!window.confirm(`${label} chat band karni hai? Users message nahi bhej payenge.`)) return;
+                  setBusy(true);
+                  setMsg('');
+                  try {
+                    await toggleCommunityRoom(room, false);
+                    setMsg(`${label} chat disabled.`);
+                  } catch (e) {
+                    setMsg(e?.message || 'Disable failed.');
+                  }
+                  setBusy(false);
+                }}
+                style={{ background: T.red, color: '#fff', fontSize: 12 }}
+              >
+                Disable {label}
+              </Btn>
+            </div>
+          ))}
         </div>
       </Card>
 

@@ -1,6 +1,20 @@
 import { bff } from './serverBff';
 import { mergeTipEditorFallbackUids } from '../stockTips/tipEditorUid';
 
+export async function disableCommunityMessage(messageId) {
+  return bff('/api/admin/community-message-disable', {
+    method: 'POST',
+    body: JSON.stringify({ messageId })
+  });
+}
+
+export async function toggleCommunityRoom(room, enabled) {
+  return bff('/api/admin/community-room-toggle', {
+    method: 'POST',
+    body: JSON.stringify({ room, enabled })
+  });
+}
+
 export async function fetchAdminEditors() {
   const j = await bff('/api/admin/config');
   return mergeTipEditorFallbackUids(j.editors || []);

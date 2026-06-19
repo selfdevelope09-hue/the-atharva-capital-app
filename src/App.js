@@ -84,7 +84,7 @@ function AppShell() {
         ]
           .filter(Boolean)
           .join(' ') || undefined}
-        style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', width: '100%', overflowY: 'visible' }}
+        style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', width: '100%', overflow: isChatRoute ? 'hidden' : 'visible' }}
       >
         <Suspense
           fallback={

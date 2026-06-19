@@ -27,6 +27,7 @@ const { normalizePlanType, planConfig, addOneMonth, VIRTUAL_BALANCE_ON_TRADING_R
 const { runMonthlyTradingReset } = require('../lib/monthlyTradingReset');
 const { bustRemovedCache } = require('../lib/removedUsers');
 const { backfillLifetimeRealizedPnlFromClosed } = require('../lib/leaderboardPnl');
+const { setRoomChatEnabled, hideCommunityMessage } = require('../lib/roastCommunity');
 const { computePaidBalanceResetAtIso } = require('../lib/paidPlanBalanceReset');
 const router = express.Router();
 router.use(verifyHttpAuth);
@@ -917,6 +918,31 @@ router.post('/api/admin/user-app-login', async (req, res) => {
   } catch (e) {
     const code = e.statusCode || 500;
     res.status(code).json({ ok: false, error: e.message });
+  }
+});
+
+router.post('/api/admin/community-room-toggle', async (req, res) => {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+    const roomId = String(req.body?.room || 'community').trim().toLowerCase();
+    const enabled = req.body?.enabled !== false;
+    await setRoomChatEnabled(roomId, enabled);
+    res.json({ ok: true, room: roomId, chatEnabled: enabled });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+router.post('/api/admin/community-message-disable', async (req, res) => {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+    const messageId = String(req.body?.messageId || '').trim();
+    if (!messageId) return res.status(400).json({ ok: false, error: 'Missing messageId' });
+    const ok = await hideCommunityMessage(messageId, true);
+    if (!ok) return res.status(404).json({ ok: false, error: 'Message not found' });
+    res.json({ ok: true, messageId, hidden: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
   }
 });
 
