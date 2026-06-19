@@ -1,71 +1,4 @@
 import React, { useContext, useMemo } from 'react';
-import { PriceContext } from '../context/PriceContext';
-import { T } from '../app/theme';
-
-export function TickerTape() {
-  const prices = useContext(PriceContext);
-  const rows = useMemo(
-    () =>
-      Object.entries(prices)
-        .filter(([sym]) => sym.endsWith('USDT'))
-        .slice(0, 12)
-        .map(([sym, d]) => ({ sym, price: Number(d.price || 0), change: Number(d.change || 0) })),
-    [prices]
-  );
-  return (
-    <div style={{ borderBottom: `1px solid ${T.border}`, background: '#0b0e11', overflow: 'hidden' }}>
-      <div style={{ display: 'flex', gap: 16, padding: '8px 12px', whiteSpace: 'nowrap', overflowX: 'auto' }}>
-        {rows.map((r) => (
-          <div key={r.sym} style={{ color: T.text, fontSize: 12 }}>
-            <span style={{ color: T.white, marginRight: 6 }}>{r.sym.replace('USDT', '')}</span>
-            <span style={{ marginRight: 6 }}>${r.price.toLocaleString()}</span>
-            <span style={{ color: r.change >= 0 ? T.green : T.red }}>
-              {r.change >= 0 ? '+' : ''}
-              {r.change.toFixed(2)}%
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-import React, { useContext, useMemo } from 'react';
-import { PriceContext } from '../context/PriceContext';
-import { T } from '../app/theme';
-
-export function TickerTape() {
-  const prices = useContext(PriceContext);
-  const rows = useMemo(
-    () =>
-      Object.entries(prices)
-        .filter(([sym]) => sym.endsWith('USDT'))
-        .slice(0, 12)
-        .map(([sym, d]) => ({
-          sym,
-          price: Number(d.price || 0),
-          change: Number(d.change || 0)
-        })),
-    [prices]
-  );
-
-  return (
-    <div style={{ borderBottom: `1px solid ${T.border}`, background: '#0b0e11', overflow: 'hidden' }}>
-      <div style={{ display: 'flex', gap: 16, padding: '8px 12px', whiteSpace: 'nowrap', overflowX: 'auto' }}>
-        {rows.map((r) => (
-          <div key={r.sym} style={{ color: T.text, fontSize: 12 }}>
-            <span style={{ color: T.white, marginRight: 6 }}>{r.sym.replace('USDT', '')}</span>
-            <span style={{ marginRight: 6 }}>${r.price.toLocaleString()}</span>
-            <span style={{ color: r.change >= 0 ? T.green : T.red }}>
-              {r.change >= 0 ? '+' : ''}
-              {r.change.toFixed(2)}%
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-import React, { useContext, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { PriceContext } from '../context/PriceContext';
 import { T } from '../app/theme';
@@ -122,3 +55,5 @@ export function TickerTape() {
     </div>
   );
 }
+
+export default TickerTape;

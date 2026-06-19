@@ -47,3 +47,67 @@ code {
 button, a {
   transition: all 0.2s ease-in-out;
 }
+
+/* ── Live price ticker (home top strip) ── */
+.ticker-wrap {
+  width: 100%;
+  overflow: hidden;
+  background: #0b0e11;
+  border-bottom: 1px solid #2b3139;
+}
+
+.ticker-track {
+  display: flex;
+  width: max-content;
+  animation: ticker-scroll 55s linear infinite;
+  will-change: transform;
+}
+
+.ticker-track:hover {
+  animation-play-state: paused;
+}
+
+.ticker-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 18px;
+  font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ticker-dot {
+  opacity: 0.35;
+  margin-left: 4px;
+}
+
+@keyframes ticker-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+/* ── App shell (navbar + bottom nav) ── */
+.app-navbar-shell {
+  padding: 10px clamp(12px, 3vw, 20px);
+  min-height: 52px;
+}
+
+.app-bottom-nav-shell {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.app-main-with-bottom-nav {
+  padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 921px) {
+  .app-main-with-bottom-nav {
+    padding-bottom: 0;
+  }
+}

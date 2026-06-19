@@ -4,7 +4,7 @@ import { AuthContext } from '../authContext';
 import { T, BRAND_LOGO, BRAND_ALT } from '../app/theme';
 import { Card } from '../components/ui/AppPrimitives';
 import { TaglineLine } from '../components/brand/TaglineBrand';
-import TickerTapeLite from '../simple/TickerTapeLite';
+import { TickerTape } from '../layout/TickerTape';
 import LeaderboardWinnerHomeBanner from '../components/LeaderboardWinnerHomeBanner';
 import { HomeWinnersBlock } from '../components/LeaderboardWinnersList';
 import { bffPublic } from '../api/serverBff';
@@ -34,7 +34,7 @@ function HomeScreen() {
   return (
     <>
       <div style={{ width: '100%', overflow: 'hidden' }}>
-        <TickerTapeLite />
+        <TickerTape />
       </div>
       <div style={{ padding: 'clamp(14px,3.2vw,28px) 14px 30px', maxWidth: 1280, margin: '0 auto', width: '100%' }}>
         <HomeWinnersBlock winnersPayload={winnersPayload} />

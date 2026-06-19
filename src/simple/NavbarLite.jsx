@@ -121,14 +121,18 @@ export default function NavbarLite() {
         <Link to="/rewards" style={navLinkStyle}>
           Rewards
         </Link>
-        {user && !mobile ? (
+        {user ? (
           <span style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
             <Link to="/chat" style={{ ...navLinkStyle, fontWeight: 700 }}>
               Chat
             </Link>
             <ChatNavBadge count={chatUnread} />
           </span>
-        ) : null}
+        ) : (
+          <Link to="/login" style={{ ...navLinkStyle, fontWeight: 700 }}>
+            Chat
+          </Link>
+        )}
 
         {user ? (
           <>

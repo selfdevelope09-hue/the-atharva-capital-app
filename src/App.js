@@ -131,14 +131,7 @@ function AppShell() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/leaderboard"
-              element={
-                <ProtectedRoute>
-                  <LeaderboardScreen />
-                </ProtectedRoute>
-              }
-            />
+            <Route path="/leaderboard" element={<LeaderboardScreen />} />
             <Route
               path="/profile/edit"
               element={
