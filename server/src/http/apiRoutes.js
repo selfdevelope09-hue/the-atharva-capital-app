@@ -29,6 +29,7 @@ const {
   postCommunityMarkRead,
   postCommunitySend,
   postCommunityDelete,
+  getCommunityRoomStatus,
   getRoastLeaderboard
 } = require('../lib/communityChatHandlers');
 
@@ -481,6 +482,9 @@ router.post('/api/chat/community-send', postCommunitySend);
 
 router.post('/api/chat/community/delete', postCommunityDelete);
 router.post('/api/chat/community-delete', postCommunityDelete);
+
+router.get('/api/chat/community-room-status', getCommunityRoomStatus);
+router.get('/api/chat/community/room-status', getCommunityRoomStatus);
 
 router.get('/api/chat/roast-leaderboard', getRoastLeaderboard);
 router.get('/api/chat/roast/leaderboard', getRoastLeaderboard);

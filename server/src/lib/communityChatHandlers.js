@@ -9,7 +9,8 @@ const {
   isRoomChatEnabled,
   queryRoastLeaderboard,
   ROAST_PNL_PER_MESSAGE,
-  roastPointsForText
+  roastPointsForText,
+  getRoomChatStatus
 } = require('./roastCommunity');
 
 function normalizeRoomId(raw) {
@@ -223,6 +224,16 @@ async function postCommunityDelete(req, res) {
   }
 }
 
+async function getCommunityRoomStatus(req, res) {
+  try {
+    const roomId = normalizeRoomId(req.query.room);
+    const status = await getRoomChatStatus(roomId);
+    res.json({ ok: true, ...status, chatEnabled: status.chatEnabled });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+}
+
 async function getRoastLeaderboard(req, res) {
   try {
     const lim = parseInt(String(req.query.limit || '20'), 10) || 20;
@@ -245,6 +256,7 @@ module.exports = {
   postCommunityMarkRead,
   postCommunitySend,
   postCommunityDelete,
+  getCommunityRoomStatus,
   getRoastLeaderboard,
   roastPointsForText,
   ROAST_PNL_PER_MESSAGE

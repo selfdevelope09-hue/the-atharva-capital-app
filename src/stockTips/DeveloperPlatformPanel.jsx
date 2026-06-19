@@ -6,7 +6,7 @@ import { T } from '../app/theme';
 import { bff } from '../api/serverBff';
 import { runMonthlyReset, backfillLeaderboardPnl } from '../api/adminDevApi';
 import { fetchAdminEditors, fetchBlockedUids, blockUid, unblockUid } from '../api/adminDevApi';
-import { adjustFollowers, removePlatformUser, restorePlatformUser, toggleCommunityRoom } from '../api/adminDevApi';
+import { adjustFollowers, removePlatformUser, restorePlatformUser, toggleCommunityRoom, fetchAdminCommunityRoomStatuses, enableAllCommunityRooms } from '../api/adminDevApi';
 import { clearLeaderboardClientCacheAndNotify } from '../utils/leaderboardClientCache';
 
 export default function DeveloperPlatformPanel() {
@@ -25,6 +25,7 @@ export default function DeveloperPlatformPanel() {
   const [followerDeltaByUid, setFollowerDeltaByUid] = useState({});
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
+  const [roomStatuses, setRoomStatuses] = useState([]);
   const searchDebounceRef = useRef(null);
 
   const uid = user?.uid;
@@ -64,6 +65,25 @@ export default function DeveloperPlatformPanel() {
     };
     load();
     const id = window.setInterval(load, 8000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [allowed]);
+
+  useEffect(() => {
+    if (!allowed) return undefined;
+    let cancelled = false;
+    const loadRooms = async () => {
+      try {
+        const j = await fetchAdminCommunityRoomStatuses();
+        if (!cancelled) setRoomStatuses(Array.isArray(j.rooms) ? j.rooms : []);
+      } catch {
+        if (!cancelled) setRoomStatuses([]);
+      }
+    };
+    loadRooms();
+    const id = window.setInterval(loadRooms, 10000);
     return () => {
       cancelled = true;
       clearInterval(id);
@@ -596,53 +616,87 @@ export default function DeveloperPlatformPanel() {
       <Card style={{ marginTop: 18, padding: 16 }}>
         <h2 style={{ color: T.white, marginTop: 0, fontSize: 16 }}>Group chat control</h2>
         <p style={{ color: T.text, fontSize: 13, lineHeight: 1.45 }}>
-          Community ya Roast group chat band/khol sakte ho. Group ke andar kisi message par admin ⏸ se hide bhi kar sakte ho (Chat screen).
+          Community band karne ke baad wapas <strong style={{ color: T.green }}>Enable</strong> kar sakte ho — chat screen par bhi admin ko Enable button dikhega.
         </p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-          {[
-            ['community', 'AuronX Community'],
-            ['roast', 'Roast Community']
-          ].map(([room, label]) => (
-            <div key={room} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <Btn
-                type="button"
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  setMsg('');
-                  try {
-                    await toggleCommunityRoom(room, true);
-                    setMsg(`${label} chat enabled.`);
-                  } catch (e) {
-                    setMsg(e?.message || 'Enable failed.');
-                  }
-                  setBusy(false);
+        <Btn
+          type="button"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            setMsg('');
+            try {
+              const j = await enableAllCommunityRooms();
+              setRoomStatuses(Array.isArray(j.rooms) ? j.rooms : []);
+              setMsg('All group chats enabled.');
+            } catch (e) {
+              setMsg(e?.message || 'Enable all failed.');
+            }
+            setBusy(false);
+          }}
+          style={{ marginTop: 10, background: T.green, color: '#fff', fontSize: 13 }}
+        >
+          Enable all group chats
+        </Btn>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14 }}>
+          {(
+            roomStatuses.length
+              ? roomStatuses
+              : [
+                  { roomId: 'community', displayName: 'Aurox trade Community', chatEnabled: true },
+                  { roomId: 'roast', displayName: 'Roast Community', chatEnabled: true }
+                ]
+          ).map((room) => {
+            const label = room.displayName || room.roomId;
+            const on = room.chatEnabled !== false;
+            return (
+              <div
+                key={room.roomId}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                  padding: '10px 12px',
+                  borderRadius: 10,
+                  background: T.card2,
+                  border: `1px solid ${on ? 'rgba(0,168,132,0.35)' : 'rgba(246,70,93,0.45)'}`
                 }}
-                style={{ background: T.green, color: '#fff', fontSize: 12 }}
               >
-                Enable {label}
-              </Btn>
-              <Btn
-                type="button"
-                disabled={busy}
-                onClick={async () => {
-                  if (!window.confirm(`${label} chat band karni hai? Users message nahi bhej payenge.`)) return;
-                  setBusy(true);
-                  setMsg('');
-                  try {
-                    await toggleCommunityRoom(room, false);
-                    setMsg(`${label} chat disabled.`);
-                  } catch (e) {
-                    setMsg(e?.message || 'Disable failed.');
-                  }
-                  setBusy(false);
-                }}
-                style={{ background: T.red, color: '#fff', fontSize: 12 }}
-              >
-                Disable {label}
-              </Btn>
-            </div>
-          ))}
+                <div>
+                  <div style={{ color: T.white, fontWeight: 700, fontSize: 14 }}>{label}</div>
+                  <div style={{ color: on ? T.green : T.red, fontSize: 12, marginTop: 2 }}>
+                    {on ? 'Enabled' : 'Disabled'}
+                  </div>
+                </div>
+                <Btn
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    const next = !on;
+                    if (!next && !window.confirm(`${label} chat band karni hai?`)) return;
+                    setBusy(true);
+                    setMsg('');
+                    try {
+                      const j = await toggleCommunityRoom(room.roomId, next);
+                      setRoomStatuses(Array.isArray(j.rooms) ? j.rooms : []);
+                      setMsg(`${label} ${next ? 'enabled' : 'disabled'}.`);
+                    } catch (e) {
+                      setMsg(e?.message || 'Toggle failed.');
+                    }
+                    setBusy(false);
+                  }}
+                  style={{
+                    background: on ? T.red : T.green,
+                    color: '#fff',
+                    fontSize: 12,
+                    minWidth: 88
+                  }}
+                >
+                  {on ? 'Disable' : 'Enable'}
+                </Btn>
+              </div>
+            );
+          })}
         </div>
       </Card>
 

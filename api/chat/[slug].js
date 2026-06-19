@@ -17,7 +17,8 @@ const DO_CHAT_UPSTREAM = {
   'community-mark-read': '/api/chat/community/mark-read',
   'community-unread': '/api/chat/community/unread',
   'community-delete': '/api/chat/community/delete',
-  'roast-leaderboard': '/api/chat/roast-leaderboard'
+  'roast-leaderboard': '/api/chat/roast-leaderboard',
+  'community-room-status': '/api/chat/community-room-status'
 };
 
 module.exports = async (req, res) => {

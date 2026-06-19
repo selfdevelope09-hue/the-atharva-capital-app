@@ -37,7 +37,7 @@ import PaidMemberBadge, { PlanTierChip } from '../components/PaidMemberBadge';
 import PageLoader from '../components/ui/PageLoader';
 import { communityMessagePreview } from '../utils/communityChatNotify';
 import { displayTraderName } from '../utils/removedUserDisplay';
-import { fetchAdminEditors, deleteCommunityChatMessage, disableCommunityMessage } from '../api/adminDevApi';
+import { fetchAdminEditors, deleteCommunityChatMessage, disableCommunityMessage, toggleCommunityRoom, fetchCommunityRoomStatus } from '../api/adminDevApi';
 import { sumDmUnread, effectiveUnreadForUid } from '../utils/threadUnread';
 import { COMMUNITY_ROOMS, communityRoomFromParam, ROAST_PNL_PER_MESSAGE } from '../config/communityRooms';
 import RoastLeaderboardPanel from '../components/chat/RoastLeaderboardPanel';
@@ -409,6 +409,8 @@ export const ChatScreen = () => {
   const [deletingCommunityMsgId, setDeletingCommunityMsgId] = useState('');
   const [roastUnread, setRoastUnread] = useState(0);
   const [mainCommunityUnread, setMainCommunityUnread] = useState(0);
+  const [roomChatEnabled, setRoomChatEnabled] = useState(true);
+  const [enablingRoom, setEnablingRoom] = useState(false);
   const [roomChatDisabled, setRoomChatDisabled] = useState('');
 
   const [narrow, setNarrow] = useState(
@@ -574,10 +576,48 @@ export const ChatScreen = () => {
     return dmChannelId(user.uid, activeOtherId);
   }, [user, activeOtherId]);
 
-  const chatViewKey = isCommunityView ? activeCommunityRoom?.cacheKey : channelId;
   const communityRoomId = activeCommunityRoom?.id || COMMUNITY_ROOM;
+  const canComposeCommunity = !isCommunityView || roomChatEnabled;
+
+  useEffect(() => {
+    if (!isCommunityView || !user?.uid || !isBffChatMode()) {
+      setRoomChatEnabled(true);
+      setRoomChatDisabled('');
+      return undefined;
+    }
+    const loadStatus = () =>
+      fetchCommunityRoomStatus(communityRoomId)
+        .then((j) => {
+          const on = j.chatEnabled !== false;
+          setRoomChatEnabled(on);
+          setRoomChatDisabled(
+            on ? '' : 'This group chat is temporarily disabled. Only admins can turn it back on.'
+          );
+        })
+        .catch(() => {});
+    loadStatus();
+    const id = window.setInterval(loadStatus, 6000);
+    return () => clearInterval(id);
+  }, [isCommunityView, communityRoomId, user?.uid]);
+
+  const enableCurrentRoomChat = async () => {
+    if (!isPlatformAdmin || !communityRoomId) return;
+    setEnablingRoom(true);
+    try {
+      await toggleCommunityRoom(communityRoomId, true);
+      setRoomChatEnabled(true);
+      setRoomChatDisabled('');
+      reloadMessagesRef.current?.();
+    } catch (e) {
+      setRoomChatDisabled(e?.message || 'Could not enable group chat.');
+    } finally {
+      setEnablingRoom(false);
+    }
+  };
+
+  const chatViewKey = isCommunityView ? activeCommunityRoom?.cacheKey : channelId;
   const inConversation = !!activeOtherId || isCommunityView;
-  const canCompose = inConversation && !uploadBusy && !sending;
+  const canCompose = inConversation && !uploadBusy && !sending && canComposeCommunity;
 
   useEffect(() => {
     if (!channelId || isCommunityView) {
@@ -1772,55 +1812,6 @@ export const ChatScreen = () => {
               </div>
             </div>
           </button>
-          <button
-            type="button"
-            className="chat-community-row chat-community-row--roast"
-            onClick={() => pickCommunity(ROAST_ROOM)}
-            style={{
-              width: '100%',
-              textAlign: 'left',
-              padding: '12px 10px',
-              border: 'none',
-              borderBottom: '1px solid rgba(255,255,255,0.06)',
-              background: searchRoom === ROAST_ROOM ? 'rgba(246,70,93,0.22)' : 'rgba(246,70,93,0.1)',
-              color: '#e9edef',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12
-            }}
-          >
-            <span style={{ fontSize: 34, lineHeight: 1, flexShrink: 0 }}>🔥</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <span style={{ fontWeight: roastUnread > 0 ? 800 : 700, fontSize: 16, color: '#ffe2e2' }}>
-                  {ROAST_NAME}
-                </span>
-                {roastUnread > 0 ? (
-                  <span
-                    style={{
-                      minWidth: 20,
-                      height: 20,
-                      padding: '0 6px',
-                      borderRadius: 999,
-                      background: '#f6465d',
-                      color: '#fff',
-                      fontSize: 11,
-                      fontWeight: 900,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}
-                  >
-                    {roastUnread > 99 ? '99+' : roastUnread}
-                  </span>
-                ) : null}
-              </div>
-              <div style={{ fontSize: 12, color: '#ffb4b4', marginTop: 4 }}>
-                +${ROAST_PNL_PER_MESSAGE.toLocaleString()} / msg · Roast points · special leaderboard
-              </div>
-            </div>
-          </button>
           {listThreads.length === 0 ? (
             <div style={{ color: T.text, fontSize: 13, padding: 16, lineHeight: 1.5 }}>
               {threadTab === 'all' && !threadSearch.trim()
@@ -1930,6 +1921,27 @@ export const ChatScreen = () => {
                 );
               })
           )}
+          <button
+            type="button"
+            className="chat-community-row chat-community-row--roast"
+            onClick={() => pickCommunity(ROAST_ROOM)}
+            style={{
+              width: '100%',
+              textAlign: 'left',
+              padding: '10px 12px',
+              marginTop: 4,
+              border: 'none',
+              borderTop: '1px solid rgba(255,255,255,0.06)',
+              background: searchRoom === ROAST_ROOM ? 'rgba(246,70,93,0.15)' : 'rgba(255,255,255,0.02)',
+              color: '#ffb4b4',
+              cursor: 'pointer',
+              fontSize: 13,
+              fontWeight: 700
+            }}
+          >
+            🔥 {ROAST_NAME}
+            {roastUnread > 0 ? ` · ${roastUnread} unread` : ''}
+          </button>
         </div>
       </aside>
       ) : null}
@@ -2092,7 +2104,41 @@ export const ChatScreen = () => {
             )}
           </div>
           {roomChatDisabled ? (
-            <div style={{ color: T.red, fontSize: 12, marginTop: 6 }}>{roomChatDisabled}</div>
+            <div
+              style={{
+                margin: inConversation ? '8px 10px 0' : '0',
+                padding: '10px 12px',
+                borderRadius: 10,
+                background: 'rgba(246,70,93,0.12)',
+                border: '1px solid rgba(246,70,93,0.35)',
+                color: '#ffb4b4',
+                fontSize: 12,
+                lineHeight: 1.5
+              }}
+            >
+              {roomChatDisabled}
+              {isPlatformAdmin ? (
+                <button
+                  type="button"
+                  disabled={enablingRoom}
+                  onClick={enableCurrentRoomChat}
+                  style={{
+                    display: 'block',
+                    marginTop: 8,
+                    padding: '8px 14px',
+                    borderRadius: 999,
+                    border: 'none',
+                    background: WA_GREEN,
+                    color: '#fff',
+                    fontWeight: 800,
+                    fontSize: 12,
+                    cursor: enablingRoom ? 'wait' : 'pointer'
+                  }}
+                >
+                  {enablingRoom ? 'Enabling…' : 'Enable group chat'}
+                </button>
+              ) : null}
+            </div>
           ) : null}
           {bootErr && <div style={{ color: T.red, fontSize: 12, marginTop: 6 }}>{bootErr}</div>}
           {firestoreErr && !bootErr && (
@@ -2116,7 +2162,47 @@ export const ChatScreen = () => {
             background: '#0b141a'
           }}
         >
-          {isRoastView && inConversation ? <RoastLeaderboardPanel compact /> : null}
+          {isRoastView && inConversation && roomChatEnabled ? <RoastLeaderboardPanel compact /> : null}
+          {!roomChatEnabled && inConversation && isCommunityView ? (
+            <div
+              style={{
+                alignSelf: 'center',
+                maxWidth: 360,
+                margin: '24px 12px',
+                padding: 16,
+                borderRadius: 12,
+                background: 'rgba(246,70,93,0.1)',
+                border: '1px solid rgba(246,70,93,0.3)',
+                color: T.text,
+                textAlign: 'center',
+                fontSize: 13,
+                lineHeight: 1.55
+              }}
+            >
+              Group chat is off right now. Messages are hidden until an admin enables it again.
+              {isPlatformAdmin ? (
+                <button
+                  type="button"
+                  disabled={enablingRoom}
+                  onClick={enableCurrentRoomChat}
+                  style={{
+                    display: 'block',
+                    margin: '12px auto 0',
+                    padding: '10px 18px',
+                    borderRadius: 999,
+                    border: 'none',
+                    background: WA_GREEN,
+                    color: '#fff',
+                    fontWeight: 800,
+                    fontSize: 13,
+                    cursor: enablingRoom ? 'wait' : 'pointer'
+                  }}
+                >
+                  {enablingRoom ? 'Enabling…' : 'Enable group chat'}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {!inConversation && (
             <div style={{ color: T.text, fontSize: 13, padding: 12, lineHeight: 1.55 }}>
               Select a conversation from the list, open{' '}

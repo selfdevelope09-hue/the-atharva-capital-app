@@ -118,8 +118,59 @@ async function setRoomChatEnabled(roomId, enabled) {
     `insert into community_room_config (room_id, display_name, chat_enabled, updated_at)
      values ($1, $2, $3, now())
      on conflict (room_id) do update set chat_enabled = excluded.chat_enabled, updated_at = now()`,
-    [roomId, roomId === 'roast' ? 'Roast Community' : 'AuronX Trade Community', !!enabled]
+    [roomId, roomId === 'roast' ? 'Roast Community' : 'Aurox trade Community', !!enabled]
   );
+}
+
+async function getRoomChatStatus(roomId) {
+  const { rows } = await getPool().query(
+    `select room_id, display_name, chat_enabled from community_room_config where room_id = $1`,
+    [roomId]
+  );
+  if (!rows[0]) {
+    return {
+      roomId,
+      displayName: roomId === 'roast' ? 'Roast Community' : 'Aurox trade Community',
+      chatEnabled: true
+    };
+  }
+  return {
+    roomId: rows[0].room_id,
+    displayName: rows[0].display_name || roomId,
+    chatEnabled: rows[0].chat_enabled !== false
+  };
+}
+
+async function listAllRoomChatStatuses() {
+  const defaults = [
+    { roomId: 'community', displayName: 'Aurox trade Community', chatEnabled: true },
+    { roomId: 'roast', displayName: 'Roast Community', chatEnabled: true }
+  ];
+  let rows = [];
+  try {
+    const res = await getPool().query(
+      `select room_id, display_name, chat_enabled from community_room_config order by room_id`
+    );
+    rows = res.rows || [];
+  } catch {
+    return defaults;
+  }
+  const byId = Object.fromEntries(rows.map((r) => [r.room_id, r]));
+  return defaults.map((d) => {
+    const row = byId[d.roomId];
+    if (!row) return d;
+    return {
+      roomId: row.room_id,
+      displayName: row.display_name || d.displayName,
+      chatEnabled: row.chat_enabled !== false
+    };
+  });
+}
+
+async function enableAllCommunityRooms() {
+  for (const roomId of ['community', 'roast']) {
+    await setRoomChatEnabled(roomId, true);
+  }
 }
 
 async function hideCommunityMessage(messageId, hidden = true) {
@@ -138,5 +189,8 @@ module.exports = {
   applyRoastMessageReward,
   queryRoastLeaderboard,
   setRoomChatEnabled,
-  hideCommunityMessage
+  hideCommunityMessage,
+  getRoomChatStatus,
+  listAllRoomChatStatuses,
+  enableAllCommunityRooms
 };

@@ -15,6 +15,18 @@ export async function toggleCommunityRoom(room, enabled) {
   });
 }
 
+export async function fetchCommunityRoomStatus(room = 'community') {
+  return bff(`/api/chat/community-room-status?room=${encodeURIComponent(room)}`);
+}
+
+export async function fetchAdminCommunityRoomStatuses() {
+  return bff('/api/admin/community-room-status');
+}
+
+export async function enableAllCommunityRooms() {
+  return bff('/api/admin/community-room-enable-all', { method: 'POST', body: JSON.stringify({}) });
+}
+
 export async function fetchAdminEditors() {
   const j = await bff('/api/admin/config');
   return mergeTipEditorFallbackUids(j.editors || []);

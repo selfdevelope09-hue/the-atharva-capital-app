@@ -3,7 +3,7 @@ export const COMMUNITY_ROOMS = {
   community: {
     id: 'community',
     cacheKey: 'community__traders',
-    name: 'AuronX Trade Community',
+    name: 'Aurox trade Community',
     subtitle: 'All traders · group chat',
     emoji: '💬',
     accent: '#00a884'

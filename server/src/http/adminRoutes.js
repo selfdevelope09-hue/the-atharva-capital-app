@@ -27,7 +27,7 @@ const { normalizePlanType, planConfig, addOneMonth, VIRTUAL_BALANCE_ON_TRADING_R
 const { runMonthlyTradingReset } = require('../lib/monthlyTradingReset');
 const { bustRemovedCache } = require('../lib/removedUsers');
 const { backfillLifetimeRealizedPnlFromClosed } = require('../lib/leaderboardPnl');
-const { setRoomChatEnabled, hideCommunityMessage } = require('../lib/roastCommunity');
+const { setRoomChatEnabled, hideCommunityMessage, listAllRoomChatStatuses, enableAllCommunityRooms } = require('../lib/roastCommunity');
 const { computePaidBalanceResetAtIso } = require('../lib/paidPlanBalanceReset');
 const router = express.Router();
 router.use(verifyHttpAuth);
@@ -921,13 +921,36 @@ router.post('/api/admin/user-app-login', async (req, res) => {
   }
 });
 
+router.get('/api/admin/community-room-status', async (req, res) => {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+    const rooms = await listAllRoomChatStatuses();
+    res.json({ ok: true, rooms });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+router.post('/api/admin/community-room-enable-all', async (req, res) => {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+    await enableAllCommunityRooms();
+    const rooms = await listAllRoomChatStatuses();
+    res.json({ ok: true, rooms });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 router.post('/api/admin/community-room-toggle', async (req, res) => {
   try {
     if (!(await requireAdmin(req, res))) return;
     const roomId = String(req.body?.room || 'community').trim().toLowerCase();
     const enabled = req.body?.enabled !== false;
     await setRoomChatEnabled(roomId, enabled);
-    res.json({ ok: true, room: roomId, chatEnabled: enabled });
+    const status = await listAllRoomChatStatuses();
+    const room = status.find((r) => r.roomId === roomId);
+    res.json({ ok: true, room: roomId, chatEnabled: enabled, rooms: status });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
