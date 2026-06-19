@@ -1,0 +1,55 @@
+# The Atharva Capital — Netlify (static CRA + API proxy to DigitalOcean)
+# Site: connect this repo in Netlify → Build settings auto-read from here.
+
+[build]
+  command = "npm run build"
+  publish = "build"
+
+[build.environment]
+  CI = "false"
+  NODE_VERSION = "20"
+  GENERATE_SOURCEMAP = "false"
+  # Baked into the client bundle at build time (set real values in Netlify UI → Environment variables)
+  REACT_APP_REALTIME_SERVER_URL = "http://64.227.188.248:3000"
+  REACT_APP_REALTIME_SOCKET_ENABLED = "true"
+  REACT_APP_REALTIME_TRADE_MODE = "true"
+  REACT_APP_POSTGRES_DATA_MODE = "true"
+  REACT_APP_USE_SUPABASE_DATA = "false"
+  REACT_APP_USE_SUPABASE_TRADE = "false"
+
+# Logo alias (same as vercel.json)
+[[redirects]]
+  from = "/auron-logo.png"
+  to = "/auron-logo.jpg"
+  status = 301
+  force = true
+
+# User uploads live on the DigitalOcean realtime server
+[[redirects]]
+  from = "/uploads/*"
+  to = "http://64.227.188.248:3000/uploads/:splat"
+  status = 200
+  force = true
+
+# All /api/* BFF routes → DigitalOcean Postgres server (same as Vercel proxy layer)
+[[redirects]]
+  from = "/api/*"
+  to = "http://64.227.188.248:3000/api/:splat"
+  status = 200
+  force = true
+
+# React Router SPA (static files in build/ are served first)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate, max-age=0"
+
+[[headers]]
+  for = "/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

@@ -16,6 +16,7 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
+    "deploy:netlify": "npm run build && npx netlify-cli deploy --prod --dir=build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
