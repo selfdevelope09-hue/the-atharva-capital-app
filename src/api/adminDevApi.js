@@ -27,6 +27,13 @@ export async function enableAllCommunityRooms() {
   return bff('/api/admin/community-room-enable-all', { method: 'POST', body: JSON.stringify({}) });
 }
 
+export async function bulkReduceAllUsersEconomy(percent) {
+  return bff('/api/admin/bulk-reduce-economy', {
+    method: 'POST',
+    body: JSON.stringify({ percent })
+  });
+}
+
 export async function fetchAdminEditors() {
   const j = await bff('/api/admin/config');
   return mergeTipEditorFallbackUids(j.editors || []);

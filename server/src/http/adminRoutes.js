@@ -28,6 +28,7 @@ const { runMonthlyTradingReset } = require('../lib/monthlyTradingReset');
 const { bustRemovedCache } = require('../lib/removedUsers');
 const { backfillLifetimeRealizedPnlFromClosed } = require('../lib/leaderboardPnl');
 const { setRoomChatEnabled, hideCommunityMessage, listAllRoomChatStatuses, enableAllCommunityRooms } = require('../lib/roastCommunity');
+const { bulkReduceAllUsersEconomy, ALLOWED_PERCENTS } = require('../lib/bulkReduceUserEconomy');
 const { computePaidBalanceResetAtIso } = require('../lib/paidPlanBalanceReset');
 const router = express.Router();
 router.use(verifyHttpAuth);
@@ -937,6 +938,23 @@ router.post('/api/admin/community-room-enable-all', async (req, res) => {
     await enableAllCommunityRooms();
     const rooms = await listAllRoomChatStatuses();
     res.json({ ok: true, rooms });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+router.post('/api/admin/bulk-reduce-economy', async (req, res) => {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+    const percent = parseInt(String(req.body?.percent ?? ''), 10);
+    if (!ALLOWED_PERCENTS.includes(percent)) {
+      return res.status(400).json({
+        ok: false,
+        error: `percent must be one of: ${ALLOWED_PERCENTS.join(', ')}`
+      });
+    }
+    const result = await bulkReduceAllUsersEconomy(percent);
+    res.json({ ok: true, ...result });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }

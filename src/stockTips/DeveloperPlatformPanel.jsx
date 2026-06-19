@@ -6,8 +6,10 @@ import { T } from '../app/theme';
 import { bff } from '../api/serverBff';
 import { runMonthlyReset, backfillLeaderboardPnl } from '../api/adminDevApi';
 import { fetchAdminEditors, fetchBlockedUids, blockUid, unblockUid } from '../api/adminDevApi';
-import { adjustFollowers, removePlatformUser, restorePlatformUser, toggleCommunityRoom, fetchAdminCommunityRoomStatuses, enableAllCommunityRooms } from '../api/adminDevApi';
+import { adjustFollowers, removePlatformUser, restorePlatformUser, toggleCommunityRoom, fetchAdminCommunityRoomStatuses, enableAllCommunityRooms, bulkReduceAllUsersEconomy } from '../api/adminDevApi';
 import { clearLeaderboardClientCacheAndNotify } from '../utils/leaderboardClientCache';
+
+const ECONOMY_REDUCE_PERCENTS = [25, 50, 75, 90];
 
 export default function DeveloperPlatformPanel() {
   const { user } = useContext(AuthContext);
@@ -610,6 +612,54 @@ export default function DeveloperPlatformPanel() {
               ))
             )}
           </div>
+        </div>
+      </Card>
+
+      <Card style={{ marginTop: 18, padding: 16 }}>
+        <h2 style={{ color: T.white, marginTop: 0, fontSize: 16 }}>Sab users — balance &amp; P/L kam karo</h2>
+        <p style={{ color: T.text, fontSize: 13, lineHeight: 1.45 }}>
+          Saare active accounts ka <strong style={{ color: T.white }}>virtual balance</strong> aur{' '}
+          <strong style={{ color: T.white }}>leaderboard P/L</strong> ek saath utna percent kam ho jayega. Showcase rows
+          bhi update honge. Ye action undo nahi hota — pehle confirm karo.
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+          {ECONOMY_REDUCE_PERCENTS.map((pct) => (
+            <Btn
+              key={pct}
+              type="button"
+              disabled={busy}
+              onClick={async () => {
+                if (
+                  !window.confirm(
+                    `Sab users ka balance aur P/L ${pct}% kam karna hai?\n\nExample: $10,000 → $${(10000 * (1 - pct / 100)).toLocaleString()}`
+                  )
+                ) {
+                  return;
+                }
+                setBusy(true);
+                setMsg('');
+                try {
+                  const j = await bulkReduceAllUsersEconomy(pct);
+                  clearLeaderboardClientCacheAndNotify();
+                  setMsg(
+                    `Done: ${j.usersUpdated ?? 0} users · balance & P/L reduced by ${pct}% (kept ${Math.round((j.keepFactor || 0) * 100)}%).`
+                  );
+                } catch (e) {
+                  setMsg(e?.message || 'Bulk reduce failed.');
+                }
+                setBusy(false);
+              }}
+              style={{
+                background: pct >= 75 ? T.red : pct >= 50 ? '#c05621' : T.yellow,
+                color: pct >= 50 ? '#fff' : '#000',
+                fontSize: 13,
+                fontWeight: 800,
+                minWidth: 72
+              }}
+            >
+              −{pct}%
+            </Btn>
+          ))}
         </div>
       </Card>
 

@@ -1743,6 +1743,55 @@ export const ChatScreen = () => {
         >
           <button
             type="button"
+            className="chat-community-row chat-community-row--roast"
+            onClick={() => pickCommunity(ROAST_ROOM)}
+            style={{
+              width: '100%',
+              textAlign: 'left',
+              padding: '12px 10px',
+              border: 'none',
+              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              background: searchRoom === ROAST_ROOM ? 'rgba(246,70,93,0.22)' : 'rgba(246,70,93,0.1)',
+              color: '#e9edef',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12
+            }}
+          >
+            <span style={{ fontSize: 34, lineHeight: 1, flexShrink: 0 }}>🔥</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <span style={{ fontWeight: roastUnread > 0 ? 800 : 700, fontSize: 16, color: '#ffe2e2' }}>
+                  {ROAST_NAME}
+                </span>
+                {roastUnread > 0 ? (
+                  <span
+                    style={{
+                      minWidth: 20,
+                      height: 20,
+                      padding: '0 6px',
+                      borderRadius: 999,
+                      background: '#f6465d',
+                      color: '#fff',
+                      fontSize: 11,
+                      fontWeight: 900,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    {roastUnread > 99 ? '99+' : roastUnread}
+                  </span>
+                ) : null}
+              </div>
+              <div style={{ fontSize: 12, color: '#ffb4b4', marginTop: 4 }}>
+                +${ROAST_PNL_PER_MESSAGE.toLocaleString()} / msg · Roast leaderboard
+              </div>
+            </div>
+          </button>
+          <button
+            type="button"
             className="chat-community-row"
             onClick={() => pickCommunity(COMMUNITY_ROOM)}
             style={{
@@ -1921,27 +1970,6 @@ export const ChatScreen = () => {
                 );
               })
           )}
-          <button
-            type="button"
-            className="chat-community-row chat-community-row--roast"
-            onClick={() => pickCommunity(ROAST_ROOM)}
-            style={{
-              width: '100%',
-              textAlign: 'left',
-              padding: '10px 12px',
-              marginTop: 4,
-              border: 'none',
-              borderTop: '1px solid rgba(255,255,255,0.06)',
-              background: searchRoom === ROAST_ROOM ? 'rgba(246,70,93,0.15)' : 'rgba(255,255,255,0.02)',
-              color: '#ffb4b4',
-              cursor: 'pointer',
-              fontSize: 13,
-              fontWeight: 700
-            }}
-          >
-            🔥 {ROAST_NAME}
-            {roastUnread > 0 ? ` · ${roastUnread} unread` : ''}
-          </button>
         </div>
       </aside>
       ) : null}
