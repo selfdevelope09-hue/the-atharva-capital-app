@@ -1,4 +1,4 @@
-﻿import React, { lazy, Suspense, useEffect } from 'react';
+import React, { lazy, Suspense, useEffect } from 'react';
 import { runDeferredStartup } from './utils/deferredStartup';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthProvider';
